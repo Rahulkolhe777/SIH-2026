@@ -1,0 +1,2 @@
+-also make the prisma sharable using turbo repo as we have use the prisma client in many directories not in only backend we may in future add AI, workers so do this 
+- also keep documenting each module( add this to agents md file )
