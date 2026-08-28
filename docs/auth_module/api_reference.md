@@ -125,6 +125,15 @@ Authenticates via email or phone with password.
 }
 ```
 
+**Unverified Account Response (`403 Forbidden`):**
+```json
+{
+  "success": false,
+  "message": "Your account is not verified. Please verify your email with the OTP sent during registration.",
+  "code": "ACCOUNT_NOT_VERIFIED"
+}
+```
+
 ---
 
 ### 2.4 Token Refresh: `POST /auth/refresh`

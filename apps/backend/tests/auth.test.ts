@@ -299,6 +299,36 @@ describe("Authentication & Registration Suite", () => {
       expect(response.status).toBe(401);
       expect(response.body.code).toBe("INVALID_CREDENTIALS");
     });
+
+    it("should reject login for unverified account (403 ACCOUNT_NOT_VERIFIED)", async () => {
+      const rawPassword = "ValidPassword123";
+      const hashedPassword = await hashPassword(rawPassword);
+
+      const mockUnverifiedUser = {
+        id: "user-unverified",
+        name: "Unverified User",
+        email: "unverified@user.com",
+        phone: null,
+        passwordHash: hashedPassword,
+        role: Role.FARMER,
+        isVerified: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUnverifiedUser);
+
+      const response = await request(app)
+        .post("/api/v1/auth/login")
+        .send({
+          identifier: "unverified@user.com",
+          password: rawPassword,
+        });
+
+      expect(response.status).toBe(403);
+      expect(response.body.success).toBe(false);
+      expect(response.body.code).toBe("ACCOUNT_NOT_VERIFIED");
+    });
   });
 
   describe("POST /api/v1/auth/refresh", () => {

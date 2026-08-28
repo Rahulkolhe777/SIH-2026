@@ -152,6 +152,15 @@ export async function loginUser(data: LoginInput) {
     );
   }
 
+  // Ensure account is verified before issuing session tokens
+  if (!user.isVerified) {
+    throw new AppError(
+      "Your account is not verified. Please verify your email with the OTP sent during registration.",
+      403,
+      "ACCOUNT_NOT_VERIFIED"
+    );
+  }
+
   // Generate tokens
   const accessToken = generateAccessToken({
     userId: user.id,
