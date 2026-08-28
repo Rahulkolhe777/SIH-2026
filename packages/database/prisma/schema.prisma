@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  FARMER
+  MANDI_OPERATOR
+  ADMIN
+}
+
+enum OtpType {
+  EMAIL_VERIFICATION
+  LOGIN_OTP
+  PASSWORD_RESET
+}
+
+model User {
+  id                  String               @id @default(cuid())
+  name                String
+  email               String               @unique
+  phone               String?              @unique
+  passwordHash        String
+  role                Role                 @default(FARMER)
+  isVerified          Boolean              @default(false)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  refreshTokens       RefreshToken[]
+  otps                OtpVerification[]
+  passwordResetTokens PasswordResetToken[]
+
+  @@index([email])
+  @@index([phone])
+  @@index([role])
+}
+
+model RefreshToken {
+  id                  String    @id @default(cuid())
+  tokenHash           String    @unique
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt           DateTime
+  revokedAt           DateTime?
+  replacedByTokenHash String?
+  createdAt           DateTime  @default(now())
+
+  @@index([userId])
+  @@index([tokenHash])
+}
+
+model OtpVerification {
+  id          String    @id @default(cuid())
+  identifier  String    // Email address or phone number
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash    String
+  type        OtpType
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([identifier, type])
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([tokenHash])
+}
