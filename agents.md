@@ -30,6 +30,8 @@ This repository contains the project source code, configuration, documentation, 
 * Inspect relevant files before making changes.
 * Reuse existing utilities and patterns where practical.
 * Keep code consistent with surrounding code.
+* **Code Style**: Do not write code in the form of classes and objects; write in the form of pure, modular, readable functions.
+* **Documentation**: Maintain and keep `docs/how_to_start/*.md` updated as the project evolves.
 * Run appropriate tests, checks, and builds after making changes.
 
 ## Testing
