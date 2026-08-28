@@ -76,17 +76,20 @@ EMAIL_FROM=onboarding@resend.dev
 
 ### Step 4: Run Prisma Database Migrations
 
-Apply the database migrations to create the tables in PostgreSQL:
+Apply the database migrations to create the tables in PostgreSQL using the shared database package (`@repo/database`):
 
 ```bash
-# Apply migrations to your PostgreSQL container
-bun run --cwd apps/backend prisma migrate dev
+# Apply migrations to your PostgreSQL container from repository root
+bun run db:migrate
+
+# Or directly in packages/database
+bun run --cwd packages/database prisma:migrate
 ```
 
 To view or manage the database visually with Prisma Studio:
 
 ```bash
-bun run --cwd apps/backend prisma studio
+bun run db:studio
 ```
 
 ---
