@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
-import { verifyAccessToken, DecodedToken } from "../utils/jwt.js";
-import { prisma } from "../lib/prisma.js";
-import { Role } from "@prisma/client";
+import { verifyAccessToken } from "../utils/jwt.js";
+import { DecodedToken } from "../interfaces/index.js";
+import { prisma, Role } from "@repo/database";
 
 // Extend Express Request interface to include user
 declare global {

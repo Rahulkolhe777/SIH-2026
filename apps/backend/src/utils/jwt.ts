@@ -1,19 +1,9 @@
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { env } from "../config/env.js";
-import { Role } from "@prisma/client";
+import { TokenPayload, DecodedToken } from "../interfaces/index.js";
 
-export interface TokenPayload {
-  userId: string;
-  email: string;
-  role: Role;
-  isVerified: boolean;
-}
-
-export interface DecodedToken extends TokenPayload {
-  iat: number;
-  exp: number;
-}
+export type { TokenPayload, DecodedToken };
 
 /**
  * Generates a short-lived access token JWT.

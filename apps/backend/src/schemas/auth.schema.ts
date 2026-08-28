@@ -28,7 +28,6 @@ export const roleRegisterSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  // Can be email or phone
   identifier: z.string().min(1, "Email or phone number is required").trim(),
   password: z.string().min(1, "Password is required"),
 });
@@ -58,11 +57,4 @@ export const resetPasswordSchema = z.object({
   newPassword: passwordValidator,
 });
 
-export type RegisterInput = z.infer<typeof registerSchema>;
-export type RoleRegisterInput = z.infer<typeof roleRegisterSchema>;
-export type LoginInput = z.infer<typeof loginSchema>;
-export type SendOtpInput = z.infer<typeof sendOtpSchema>;
-export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
-export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>;
-export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
-export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+export * from "../interfaces/index.js";

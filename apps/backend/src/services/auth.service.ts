@@ -15,8 +15,8 @@ import {
   RegisterInput,
   LoginInput,
   ResetPasswordInput,
-} from "../schemas/auth.schema.js";
-import { OtpType } from "@prisma/client";
+} from "../interfaces/index.js";
+import { OtpType } from "@repo/database";
 
 /**
  * Registers a new user account (Farmer or Mandi Operator).
