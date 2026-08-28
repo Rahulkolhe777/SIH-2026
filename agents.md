@@ -31,7 +31,9 @@ This repository contains the project source code, configuration, documentation, 
 * Reuse existing utilities and patterns where practical.
 * Keep code consistent with surrounding code.
 * **Code Style**: Do not write code in the form of classes and objects; write in the form of pure, modular, readable functions.
-* **Documentation**: Maintain and keep `docs/how_to_start/*.md` updated as the project evolves.
+* **Module Documentation**: Keep comprehensive documentation for every feature/module in `docs/<module_name>/` (including architecture, API references, and frontend/consumer integration guides) updated as each module is built.
+* **Shared Database**: All database models, Prisma client, and migrations must reside in `@repo/database` (`packages/database`) so they are sharable across all services (backend, background workers, AI pipelines).
+* **Getting Started Documentation**: Maintain and keep `docs/how_to_start/*.md` updated as the project evolves.
 * Run appropriate tests, checks, and builds after making changes.
 
 ## Testing
