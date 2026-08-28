@@ -7,7 +7,7 @@ const envSchema = z.object({
   PORT: z.string().default("4000").transform((val) => parseInt(val, 10)),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   CLIENT_URL: z.string().default("http://localhost:3000"),
-  DATABASE_URL: z.string().default("postgresql://postgres:postgres@localhost:5432/sih_db?schema=public"),
+  DATABASE_URL: z.string().default("postgresql://postgres:postgres@localhost:5433/sih_db?schema=public"),
   JWT_ACCESS_SECRET: z.string().min(16, "JWT_ACCESS_SECRET must be at least 16 chars").default("super-secret-access-token-key-change-in-prod-1234"),
   JWT_REFRESH_SECRET: z.string().min(16, "JWT_REFRESH_SECRET must be at least 16 chars").default("super-secret-refresh-token-key-change-in-prod-5678"),
   JWT_ACCESS_EXPIRES_IN: z.string().default("15m"),

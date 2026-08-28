@@ -1,25 +1,39 @@
 import { Router } from "express";
-import { authController } from "../controllers/auth.controller.js";
+import {
+  register,
+  login,
+  refresh,
+  logout,
+  sendOtpCode,
+  verifyOtpCode,
+  requestForgotPassword,
+  submitResetPassword,
+  getMe,
+} from "../controllers/auth.controller.js";
 import { authenticate } from "../middlewares/auth.middleware.js";
-import { loginLimiter, otpLimiter, authLimiter } from "../middlewares/rateLimiter.middleware.js";
+import {
+  loginLimiter,
+  otpLimiter,
+  authLimiter,
+} from "../middlewares/rateLimiter.middleware.js";
 
 const router: Router = Router();
 
 // Public Authentication Endpoints
-router.post("/register", authLimiter, (req, res, next) => authController.register(req, res, next));
-router.post("/login", loginLimiter, (req, res, next) => authController.login(req, res, next));
-router.post("/refresh", (req, res, next) => authController.refresh(req, res, next));
-router.post("/logout", (req, res, next) => authController.logout(req, res, next));
+router.post("/register", authLimiter, register);
+router.post("/login", loginLimiter, login);
+router.post("/refresh", refresh);
+router.post("/logout", logout);
 
 // OTP & Verification Endpoints
-router.post("/send-otp", otpLimiter, (req, res, next) => authController.sendOtp(req, res, next));
-router.post("/verify-otp", (req, res, next) => authController.verifyOtp(req, res, next));
+router.post("/send-otp", otpLimiter, sendOtpCode);
+router.post("/verify-otp", verifyOtpCode);
 
 // Password Recovery Endpoints
-router.post("/forgot-password", otpLimiter, (req, res, next) => authController.forgotPassword(req, res, next));
-router.post("/reset-password", (req, res, next) => authController.resetPassword(req, res, next));
+router.post("/forgot-password", otpLimiter, requestForgotPassword);
+router.post("/reset-password", submitResetPassword);
 
 // Protected User Session Endpoint
-router.get("/me", authenticate, (req, res, next) => authController.getMe(req, res, next));
+router.get("/me", authenticate, getMe);
 
 export default router;
