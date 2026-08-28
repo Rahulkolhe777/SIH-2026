@@ -1,455 +1,456 @@
-# Frontend Integration Guide for Auth Module
+# Frontend Integration Specification — Authentication Module
 
-This guide provides frontend developers with step-by-step instructions, patterns, and production-ready code examples (React / Next.js / TypeScript) for integrating with the Authentication and RBAC backend.
-
----
-
-## 1. Authentication Architecture for Frontend
-
-### Token Lifecycle Strategy
-- **`accessToken`**: Short-lived JWT (15 min). Stored in memory or secure storage. Sent in the `Authorization: Bearer <token>` header with every API request.
-- **`refreshToken`**: Long-lived token (7 days). Stored in `localStorage` / `sessionStorage` (or HTTP-only cookie). Used to silently obtain a new `accessToken` when receiving a `401 Unauthorized` / `TOKEN_EXPIRED_OR_INVALID` error.
+This document is the technical contract for Frontend Engineers integrating with the SIH Authentication & RBAC backend. It provides endpoint definitions, required request headers, payload specifications, sample response structures, error handling rules, and user flow architectures.
 
 ---
 
-## 2. API Client with Auto-Refresh Interceptor (Axios Example)
+## 1. Global API Configuration
 
-```typescript
-// lib/apiClient.ts
-import axios from "axios";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api/v1";
-
-export const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
-});
-
-// Attach access token to every outgoing request
-apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem("accessToken");
-  if (token && config.headers) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-// Automatic token refresh interceptor on 401
-let isRefreshing = false;
-let failedQueue: Array<{
-  resolve: (value?: unknown) => void;
-  reject: (reason?: unknown) => void;
-}> = [];
-
-const processQueue = (error: any, token: string | null = null) => {
-  failedQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error);
-    } else {
-      prom.resolve(token);
-    }
-  });
-  failedQueue = [];
-};
-
-apiClient.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
-
-    if (
-      error.response?.status === 401 &&
-      !originalRequest._retry &&
-      !originalRequest.url?.includes("/auth/login") &&
-      !originalRequest.url?.includes("/auth/refresh")
-    ) {
-      if (isRefreshing) {
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        })
-          .then((token) => {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
-            return apiClient(originalRequest);
-          })
-          .catch((err) => Promise.reject(err));
-      }
-
-      originalRequest._retry = true;
-      isRefreshing = true;
-
-      const refreshToken = localStorage.getItem("refreshToken");
-      if (!refreshToken) {
-        localStorage.clear();
-        window.location.href = "/login";
-        return Promise.reject(error);
-      }
-
-      try {
-        const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-          refreshToken,
-        });
-
-        const newAccessToken = data.data.accessToken;
-        const newRefreshToken = data.data.refreshToken;
-
-        localStorage.setItem("accessToken", newAccessToken);
-        localStorage.setItem("refreshToken", newRefreshToken);
-
-        apiClient.defaults.headers.common.Authorization = `Bearer ${newAccessToken}`;
-        processQueue(null, newAccessToken);
-
-        return apiClient(originalRequest);
-      } catch (refreshError) {
-        processQueue(refreshError, null);
-        localStorage.clear();
-        window.location.href = "/login?session_expired=true";
-        return Promise.reject(refreshError);
-      } finally {
-        isRefreshing = false;
-      }
-    }
-
-    return Promise.reject(error);
-  }
-);
-```
+- **Base URL**: `http://localhost:4000/api/v1` (Production: configurable via `NEXT_PUBLIC_API_URL` or `VITE_API_URL`)
+- **Default Headers**:
+  ```http
+  Content-Type: application/json
+  Accept: application/json
+  ```
+- **Protected Request Header**:
+  ```http
+  Authorization: Bearer <accessToken>
+  ```
 
 ---
 
-## 3. React Auth Context & Hook
+## 2. Token Lifecycle & Storage Rules
 
-```tsx
-// context/AuthContext.tsx
-import React, { createContext, useContext, useState, useEffect } from "react";
-import { apiClient } from "../lib/apiClient";
+| Token | Type | Lifetime | Recommended Storage | Purpose |
+| :--- | :--- | :--- | :--- | :--- |
+| **`accessToken`** | JWT (Bearer) | 15 Minutes | In-Memory / Secure State | Sent in `Authorization` header for all protected API calls. |
+| **`refreshToken`** | Opaque String | 7 Days | `localStorage` / Secure Storage | Used exclusively to request new `accessToken` upon 401 expiration. |
 
-export type UserRole = "FARMER" | "MANDI_OPERATOR" | "ADMIN";
+---
 
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  phone?: string;
-  role: UserRole;
-  isVerified: boolean;
-  createdAt: string;
+## 3. Endpoints & Payload Specifications
+
+### 3.1 User Registration (Unified)
+
+- **Endpoint**: `POST /auth/register`
+- **Auth Required**: No
+- **Rate Limit**: 30 requests / 15 mins
+
+#### Request Payload
+| Field | Type | Required | Validation Rules | Description |
+| :--- | :--- | :---: | :--- | :--- |
+| `name` | String | Yes | Min 2, max 100 chars | Full name of the user |
+| `email` | String | Yes | Valid email format | User's email address |
+| `phone` | String | No | International format (e.g. `+919876543210`) | Mobile number |
+| `password` | String | Yes | Min 8 chars, at least 1 letter, 1 number | Account password |
+| `role` | String | Yes | `"FARMER"` \| `"MANDI_OPERATOR"` | Account type |
+
+```json
+{
+  "name": "Ramesh Kumar",
+  "email": "ramesh@example.com",
+  "phone": "+919876543210",
+  "password": "SecurePassword123",
+  "role": "FARMER"
 }
+```
 
-interface AuthContextType {
-  user: User | null;
-  loading: boolean;
-  login: (identifier: string, password: string) => Promise<User>;
-  register: (data: { name: string; email: string; phone?: string; password: string; role: UserRole }) => Promise<User>;
-  logout: () => Promise<void>;
-  refreshProfile: () => Promise<void>;
+#### Success Response (`201 Created`)
+```json
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": "cm7xyz1230000abc",
+      "name": "Ramesh Kumar",
+      "email": "ramesh@example.com",
+      "phone": "+919876543210",
+      "role": "FARMER",
+      "isVerified": false,
+      "createdAt": "2026-08-28T16:30:00.000Z"
+    },
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refreshToken": "4a7f9b8c0e2d1f4a9b8c0e2d1f...",
+    "message": "Registration successful. Please verify your email with the OTP sent."
+  }
 }
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const fetchCurrentUser = async () => {
-    try {
-      const token = localStorage.getItem("accessToken");
-      if (!token) {
-        setUser(null);
-        return;
-      }
-      const response = await apiClient.get("/auth/me");
-      setUser(response.data.data.user);
-    } catch {
-      setUser(null);
-      localStorage.clear();
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchCurrentUser();
-  }, []);
-
-  const login = async (identifier: string, password: string): Promise<User> => {
-    const { data } = await apiClient.post("/auth/login", { identifier, password });
-    const { user: userData, accessToken, refreshToken } = data.data;
-
-    localStorage.setItem("accessToken", accessToken);
-    localStorage.setItem("refreshToken", refreshToken);
-    setUser(userData);
-    return userData;
-  };
-
-  const register = async (formData: {
-    name: string;
-    email: string;
-    phone?: string;
-    password: string;
-    role: UserRole;
-  }): Promise<User> => {
-    const { data } = await apiClient.post("/auth/register", formData);
-    const { user: userData, accessToken, refreshToken } = data.data;
-
-    localStorage.setItem("accessToken", accessToken);
-    localStorage.setItem("refreshToken", refreshToken);
-    setUser(userData);
-    return userData;
-  };
-
-  const logout = async () => {
-    const refreshToken = localStorage.getItem("refreshToken");
-    try {
-      if (refreshToken) {
-        await apiClient.post("/auth/logout", { refreshToken });
-      }
-    } finally {
-      localStorage.clear();
-      setUser(null);
-      window.location.href = "/login";
-    }
-  };
-
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        login,
-        register,
-        logout,
-        refreshProfile: fetchCurrentUser,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
-};
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
-};
 ```
+
+#### Error Responses
+- `409 Conflict` (`EMAIL_EXISTS`): Email is already registered.
+- `409 Conflict` (`PHONE_EXISTS`): Phone number is already registered.
+- `400 Bad Request` (`VALIDATION_ERROR`): Invalid format (e.g. weak password or invalid email).
 
 ---
 
-## 4. Protected Route & Role Guard Component
+### 3.2 Dedicated Role Registration Endpoints
 
-```tsx
-// components/ProtectedRoute.tsx
-import React from "react";
-import { Navigate, useLocation } from "react-router-dom"; // or Next.js router
-import { useAuth, UserRole } from "../context/AuthContext";
+Alternative endpoints where role is determined by URL:
 
-interface ProtectedRouteProps {
-  children: React.ReactNode;
-  allowedRoles?: UserRole[];
-  requireVerification?: boolean;
+- **Farmer Registration**: `POST /user/farmer`
+- **Mandi Operator Registration**: `POST /user/mandi`
+
+#### Request Payload
+```json
+{
+  "name": "Suresh APMC",
+  "email": "suresh@apmc.org",
+  "phone": "+919876543211",
+  "password": "SecurePassword123"
 }
+```
 
-export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
-  children,
-  allowedRoles,
-  requireVerification = false,
-}) => {
-  const { user, loading } = useAuth();
-  const location = useLocation();
-
-  if (loading) {
-    return <div className="spinner">Loading session...</div>;
+#### Success Response (`201 Created`)
+```json
+{
+  "success": true,
+  "message": "Farmer account registered successfully.",
+  "data": {
+    "user": {
+      "id": "cm7xyz1230000abc",
+      "name": "Suresh APMC",
+      "email": "suresh@apmc.org",
+      "phone": "+919876543211",
+      "role": "MANDI_OPERATOR",
+      "isVerified": false,
+      "createdAt": "2026-08-28T16:30:00.000Z"
+    },
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refreshToken": "4a7f9b8c0e2d1f4a9b8c0e2d1f..."
   }
-
-  // 1. Check if authenticated
-  if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
-  // 2. Check if verified (if required)
-  if (requireVerification && !user.isVerified) {
-    return <Navigate to="/verify-email" replace />;
-  }
-
-  // 3. Check Role-Based Access
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
-    // Redirect to their respective home dashboard if they try to access cross-role page
-    const redirectUrl = user.role === "FARMER" ? "/farmer/dashboard" : "/mandi/dashboard";
-    return <Navigate to={redirectUrl} replace />;
-  }
-
-  return <>{children}</>;
-};
+}
 ```
 
 ---
 
-## 5. Post-Login / Registration Redirection Strategy
+### 3.3 User Login
 
-After login or registration, inspect `user.role` to redirect the user to their appropriate landing area:
+- **Endpoint**: `POST /auth/login`
+- **Auth Required**: No
+- **Rate Limit**: 10 attempts / 15 mins
 
-```typescript
-const handleLoginSuccess = (user: User) => {
-  if (user.role === "FARMER") {
-    navigate("/farmer/dashboard");
-  } else if (user.role === "MANDI_OPERATOR") {
-    navigate("/mandi/dashboard");
-  } else if (user.role === "ADMIN") {
-    navigate("/admin/dashboard");
+#### Request Payload
+| Field | Type | Required | Description |
+| :--- | :--- | :---: | :--- |
+| `identifier` | String | Yes | Email address OR phone number |
+| `password` | String | Yes | Account password |
+
+```json
+{
+  "identifier": "ramesh@example.com",
+  "password": "SecurePassword123"
+}
+```
+
+#### Success Response (`200 OK`)
+```json
+{
+  "success": true,
+  "message": "Login successful.",
+  "data": {
+    "user": {
+      "id": "cm7xyz1230000abc",
+      "name": "Ramesh Kumar",
+      "email": "ramesh@example.com",
+      "phone": "+919876543210",
+      "role": "FARMER",
+      "isVerified": true,
+      "createdAt": "2026-08-28T16:30:00.000Z"
+    },
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refreshToken": "4a7f9b8c0e2d1f4a9b8c0e2d1f..."
   }
-};
+}
+```
+
+#### Error Responses
+- `401 Unauthorized` (`INVALID_CREDENTIALS`): Wrong email/phone or password.
+- `403 Forbidden` (`ACCOUNT_NOT_VERIFIED`): User has not completed OTP verification.
+  ```json
+  {
+    "success": false,
+    "message": "Your account is not verified. Please verify your email with the OTP sent during registration.",
+    "code": "ACCOUNT_NOT_VERIFIED"
+  }
+  ```
+
+---
+
+### 3.4 Token Refresh (Silent Re-authentication)
+
+- **Endpoint**: `POST /auth/refresh`
+- **Auth Required**: No
+
+#### Request Payload
+| Field | Type | Required | Description |
+| :--- | :--- | :---: | :--- |
+| `refreshToken` | String | Yes | Stored active refresh token |
+
+```json
+{
+  "refreshToken": "4a7f9b8c0e2d1f4a9b8c0e2d1f..."
+}
+```
+
+#### Success Response (`200 OK`)
+```json
+{
+  "success": true,
+  "message": "Access token refreshed successfully.",
+  "data": {
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refreshToken": "9d8e7f6a5b4c3d2e1f0a9b8c7d..."
+  }
+}
+```
+
+#### Error Responses
+- `401 Unauthorized` (`REFRESH_TOKEN_EXPIRED`): Refresh token expired. Redirect user to `/login`.
+- `401 Unauthorized` (`TOKEN_REUSE_DETECTED`): Stolen token detected. Clear all local storage and force `/login`.
+
+---
+
+### 3.5 User Logout
+
+- **Endpoint**: `POST /auth/logout`
+- **Auth Required**: No
+
+#### Request Payload
+```json
+{
+  "refreshToken": "4a7f9b8c0e2d1f4a9b8c0e2d1f..."
+}
+```
+
+#### Success Response (`200 OK`)
+```json
+{
+  "success": true,
+  "data": {
+    "success": true,
+    "message": "Logged out successfully."
+  }
+}
 ```
 
 ---
 
-## 6. OTP Verification Component Pattern
+### 3.6 Send / Resend OTP
 
-```tsx
-// components/OtpVerificationModal.tsx
-import React, { useState } from "react";
-import { apiClient } from "../lib/apiClient";
-import { useAuth } from "../context/AuthContext";
+- **Endpoint**: `POST /auth/send-otp`
+- **Auth Required**: No
+- **Rate Limit**: 5 requests / 10 mins
 
-export const OtpVerificationModal: React.FC<{ email: string; onSuccess: () => void }> = ({
-  email,
-  onSuccess,
-}) => {
-  const [otp, setOtp] = useState("");
-  const [error, setError] = useState("");
-  const [resending, setResending] = useState(false);
-  const { refreshProfile } = useAuth();
+#### Request Payload
+| Field | Type | Required | Options |
+| :--- | :--- | :---: | :--- |
+| `identifier` | String | Yes | Target email or phone number |
+| `type` | String | Yes | `"EMAIL_VERIFICATION"` \| `"LOGIN_OTP"` \| `"PASSWORD_RESET"` |
 
-  const handleVerify = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
+```json
+{
+  "identifier": "ramesh@example.com",
+  "type": "EMAIL_VERIFICATION"
+}
+```
 
-    try {
-      await apiClient.post("/auth/verify-otp", {
-        identifier: email,
-        code: otp,
-        type: "EMAIL_VERIFICATION",
-      });
-
-      await refreshProfile();
-      onSuccess();
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Invalid or expired OTP code.");
-    }
-  };
-
-  const handleResendOtp = async () => {
-    setResending(true);
-    try {
-      await apiClient.post("/auth/send-otp", {
-        identifier: email,
-        type: "EMAIL_VERIFICATION",
-      });
-      alert("New OTP sent to your email!");
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Failed to resend OTP.");
-    } finally {
-      setResending(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleVerify} className="otp-card">
-      <h3>Verify Your Email</h3>
-      <p>Enter the 6-digit code sent to {email}</p>
-
-      {error && <div className="error-banner">{error}</div>}
-
-      <input
-        type="text"
-        maxLength={6}
-        value={otp}
-        onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-        placeholder="123456"
-        className="otp-input"
-        required
-      />
-
-      <button type="submit" className="btn-primary">Verify Account</button>
-      <button type="button" onClick={handleResendOtp} disabled={resending} className="btn-secondary">
-        {resending ? "Sending..." : "Resend OTP"}
-      </button>
-    </form>
-  );
-};
+#### Success Response (`200 OK`)
+```json
+{
+  "success": true,
+  "data": {
+    "success": true,
+    "message": "OTP sent successfully to ramesh@example.com. Valid for 10 minutes."
+  }
+}
 ```
 
 ---
 
-## 7. Password Reset Screen Pattern
+### 3.7 Verify OTP
 
-```tsx
-// pages/ResetPassword.tsx
-import React, { useState } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
-import { apiClient } from "../lib/apiClient";
+- **Endpoint**: `POST /auth/verify-otp`
+- **Auth Required**: No
 
-export const ResetPasswordPage = () => {
-  const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
+#### Request Payload
+| Field | Type | Required | Description |
+| :--- | :--- | :---: | :--- |
+| `identifier` | String | Yes | Email or phone number |
+| `code` | String | Yes | Exactly 6 numeric digits |
+| `type` | String | Yes | `"EMAIL_VERIFICATION"` \| `"LOGIN_OTP"` \| `"PASSWORD_RESET"` |
 
-  const email = searchParams.get("email") || "";
-  const token = searchParams.get("token") || "";
-
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newPassword !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
-
-    try {
-      await apiClient.post("/auth/reset-password", {
-        email,
-        token,
-        newPassword,
-      });
-      setSuccess(true);
-      setTimeout(() => navigate("/login"), 2500);
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Failed to reset password.");
-    }
-  };
-
-  if (success) {
-    return <div className="alert-success">Password reset successfully! Redirecting to login...</div>;
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="reset-password-form">
-      <h2>Create New Password</h2>
-      {error && <div className="alert-danger">{error}</div>}
-
-      <input
-        type="password"
-        value={newPassword}
-        onChange={(e) => setNewPassword(e.target.value)}
-        placeholder="New Password (min. 8 characters)"
-        required
-      />
-      <input
-        type="password"
-        value={confirmPassword}
-        onChange={(e) => setConfirmPassword(e.target.value)}
-        placeholder="Confirm New Password"
-        required
-      />
-
-      <button type="submit" className="btn-primary">Save New Password</button>
-    </form>
-  );
-};
+```json
+{
+  "identifier": "ramesh@example.com",
+  "code": "572098",
+  "type": "EMAIL_VERIFICATION"
+}
 ```
+
+#### Success Response (`200 OK`)
+```json
+{
+  "success": true,
+  "data": {
+    "success": true,
+    "message": "OTP verified successfully.",
+    "isVerified": true
+  }
+}
+```
+
+#### Error Responses
+- `400 Bad Request` (`INVALID_OTP`): Code is incorrect, expired (>10 mins), or already consumed.
+
+---
+
+### 3.8 Forgot Password
+
+- **Endpoint**: `POST /auth/forgot-password`
+- **Auth Required**: No
+- **Rate Limit**: 5 requests / 10 mins
+
+#### Request Payload
+```json
+{
+  "email": "ramesh@example.com"
+}
+```
+
+#### Success Response (`200 OK`)
+```json
+{
+  "success": true,
+  "data": {
+    "success": true,
+    "message": "If an account exists with this email, a password reset link and OTP has been sent."
+  }
+}
+```
+
+---
+
+### 3.9 Reset Password
+
+- **Endpoint**: `POST /auth/reset-password`
+- **Auth Required**: No
+
+#### Request Payload
+| Field | Type | Required | Description |
+| :--- | :--- | :---: | :--- |
+| `email` | String | Yes | User email address |
+| `token` | String | Yes | 64-char reset token from email link OR 6-digit OTP |
+| `newPassword` | String | Yes | Min 8 chars, 1 letter, 1 number |
+
+```json
+{
+  "email": "ramesh@example.com",
+  "token": "3a8bc827d091e7fb10486bc9...",
+  "newPassword": "NewStrongPassword456"
+}
+```
+
+#### Success Response (`200 OK`)
+```json
+{
+  "success": true,
+  "data": {
+    "success": true,
+    "message": "Password reset successful. You may now login with your new password."
+  }
+}
+```
+
+#### Error Responses
+- `400 Bad Request` (`INVALID_RESET_TOKEN`): Token or OTP is expired, invalid, or already used.
+
+---
+
+### 3.10 Fetch Authenticated User Session
+
+- **Endpoint**: `GET /auth/me`
+- **Auth Required**: Yes (`Authorization: Bearer <accessToken>`)
+
+#### Success Response (`200 OK`)
+```json
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": "cm7xyz1230000abc",
+      "name": "Ramesh Kumar",
+      "email": "ramesh@example.com",
+      "phone": "+919876543210",
+      "role": "FARMER",
+      "isVerified": true,
+      "createdAt": "2026-08-28T16:30:00.000Z",
+      "updatedAt": "2026-08-28T16:35:00.000Z"
+    }
+  }
+}
+```
+
+---
+
+## 4. Frontend Integration Flows & Rules
+
+### Flow 1: Registration & Role Selection
+1. The registration UI provides a role selection tab or dropdown: **Farmer** (`FARMER`) or **Mandi Operator** (`MANDI_OPERATOR`).
+2. User submits registration details to `POST /auth/register` (or `/user/farmer` / `/user/mandi`).
+3. Backend creates account with `isVerified: false` and emails a 6-digit OTP.
+4. Frontend prompts user with the OTP verification screen.
+
+---
+
+### Flow 2: Account OTP Verification
+1. User enters the 6-digit code received via email.
+2. Frontend submits `POST /auth/verify-otp` with `{ identifier, code, type: "EMAIL_VERIFICATION" }`.
+3. Upon `200 OK` (`isVerified: true`), frontend directs user to `/login` or logs them into their role-specific dashboard.
+
+---
+
+### Flow 3: Login & Role-Based Navigation
+1. User enters identifier (email/phone) and password.
+2. If the user is unverified, backend responds with `403 Forbidden` (`code: "ACCOUNT_NOT_VERIFIED"`). Frontend should capture this and route to `/verify-otp?email=...`.
+3. On `200 OK`, frontend saves `accessToken` and `refreshToken` and redirects according to `user.role`:
+   - If `role === "FARMER"` ➔ navigate to `/farmer/dashboard`
+   - If `role === "MANDI_OPERATOR"` ➔ navigate to `/mandi/dashboard`
+
+---
+
+### Flow 4: Auto-Refresh Interceptor Handling
+1. Every API call includes `Authorization: Bearer <accessToken>`.
+2. When the backend returns `401 Unauthorized` (`code: "TOKEN_EXPIRED_OR_INVALID"`):
+   - Frontend pauses pending requests.
+   - Dispatches `POST /auth/refresh` with `{ refreshToken }`.
+   - On success, updates stored tokens and retries original request.
+   - On failure (`REFRESH_TOKEN_EXPIRED` or `TOKEN_REUSE_DETECTED`), clears local storage and navigates to `/login`.
+
+---
+
+### Flow 5: Forgot / Reset Password
+1. User enters email on `/forgot-password` ➔ calls `POST /auth/forgot-password`.
+2. Email contains a reset link with query parameters `?token=<hexToken>&email=<email>` plus a 6-digit OTP.
+3. User navigates to `/reset-password`, enters new password, and submits `POST /auth/reset-password`.
+4. On `200 OK`, show success notification and redirect to `/login`.
+
+---
+
+## 5. Error Code Dictionary for Frontend UI
+
+| Backend Error Code | HTTP Status | Suggested User-Facing UI Message |
+| :--- | :---: | :--- |
+| `VALIDATION_ERROR` | 400 | Please check the entered fields for errors. |
+| `INVALID_OTP` | 400 | The OTP code entered is invalid or has expired. |
+| `INVALID_RESET_TOKEN` | 400 | The password reset link or OTP has expired or already been used. |
+| `INVALID_CREDENTIALS` | 401 | Incorrect email/phone or password. |
+| `UNAUTHORIZED` | 401 | Your session has expired. Please login again. |
+| `TOKEN_EXPIRED_OR_INVALID` | 401 | Session token expired. Auto-refreshing... |
+| `REFRESH_TOKEN_EXPIRED` | 401 | Your session has expired. Please login again. |
+| `TOKEN_REUSE_DETECTED` | 401 | Security alert: session invalidated. Please login again. |
+| `ACCOUNT_NOT_VERIFIED` | 403 | Your account is not verified yet. Please enter the OTP sent to your email. |
+| `FORBIDDEN_ROLE` | 403 | You do not have permission to access this page. |
+| `EMAIL_EXISTS` | 409 | An account with this email address already exists. |
+| `PHONE_EXISTS` | 409 | An account with this phone number already exists. |
+| `TOO_MANY_REQUESTS` | 429 | Too many attempts. Please wait a few minutes before trying again. |
+| `INTERNAL_SERVER_ERROR` | 500 | An unexpected server error occurred. Please try again later. |
