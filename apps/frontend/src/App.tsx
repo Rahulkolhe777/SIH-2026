@@ -1,20 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { AuthPageContent } from "./components/AuthPageContent";
-import { LogOut, User, ShieldCheck, Sprout, Landmark, ArrowRight, LayoutDashboard, QrCode } from "lucide-react";
+import { LogOut, User, ShieldCheck, Sprout, Landmark, LayoutDashboard, QrCode } from "lucide-react";
+import { useAppDispatch, useAppSelector } from "./store";
+import { fetchCurrentUserThunk, logout } from "./store/slices/authSlice";
 import "./index.css";
 
 export function App() {
+  const dispatch = useAppDispatch();
+  const { user: currentUser, isAuthenticated } = useAppSelector((state) => state.auth);
+
   const [currentPath, setCurrentPath] = useState<string>(() => {
     return typeof window !== "undefined" ? window.location.pathname : "/login";
-  });
-
-  const [currentUser, setCurrentUser] = useState<any>(() => {
-    try {
-      const saved = localStorage.getItem("mandi_current_user");
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
   });
 
   useEffect(() => {
@@ -25,22 +21,26 @@ export function App() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
+  // Fetch session on load if token exists
+  useEffect(() => {
+    if (localStorage.getItem("mandi_access_token")) {
+      dispatch(fetchCurrentUserThunk());
+    }
+  }, [dispatch]);
+
   const handleLogout = () => {
-    localStorage.removeItem("mandi_current_user");
-    localStorage.removeItem("mandi_access_token");
-    setCurrentUser(null);
+    dispatch(logout());
     window.history.pushState({}, "", "/login");
     setCurrentPath("/login");
   };
 
-  const handleAuthSuccess = (userData: any) => {
-    setCurrentUser(userData);
+  const handleAuthSuccess = () => {
     window.history.pushState({}, "", "/dashboard");
     setCurrentPath("/dashboard");
   };
 
-  // If user is not authenticated or explicitly on /login or /register
-  if (!currentUser || currentPath === "/login" || currentPath === "/register") {
+  // If user is not authenticated or explicitly visiting /login or /register
+  if (!isAuthenticated || currentPath === "/login" || currentPath === "/register") {
     const initialMode = currentPath === "/register" ? "REGISTER" : "LOGIN";
     return <AuthPageContent initialMode={initialMode} onSuccess={handleAuthSuccess} />;
   }
@@ -66,7 +66,7 @@ export function App() {
           </div>
           <div>
             <span className="font-bold text-lg text-white">Agrovia Mandi Portal</span>
-            <span className="text-xs text-white/50 block">Connected to Live APMC Network</span>
+            <span className="text-xs text-white/50 block">Connected to Live Backend API</span>
           </div>
         </div>
 
@@ -96,18 +96,18 @@ export function App() {
       <main className="max-w-6xl w-full mx-auto px-6 py-12 flex-1 flex flex-col justify-center items-center text-center space-y-8">
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#C8F52F]/15 border border-[#C8F52F]/30 text-xs font-semibold text-[#C8F52F]">
           <ShieldCheck className="w-4 h-4" />
-          <span>Active APMC Session Authenticated</span>
+          <span>Active Session Authenticated</span>
         </div>
 
         <div className="space-y-3 max-w-2xl">
           <h1 className="text-4xl sm:text-5xl font-normal tracking-tight text-white">
             Welcome back,{" "}
             <span className="font-editorial italic text-[#C8F52F]">
-              {currentUser?.name || "Farmer"}
+              {currentUser?.name || "User"}
             </span>
           </h1>
           <p className="text-white/70 text-base">
-            Your {currentUser?.role === "MANDI_OPERATOR" ? "APMC Mandi Gate Operator" : "Farmer Unloading"} portal is ready. You can manage tokens, real-time queues, and auction receipts.
+            Your {currentUser?.role === "MANDI_OPERATOR" ? "Mandi Operator" : "Farmer"} portal is ready. You can manage tokens, real-time queues, and auction receipts.
           </p>
         </div>
 
@@ -134,14 +134,14 @@ export function App() {
               <User className="w-5 h-5" />
             </div>
             <h3 className="font-semibold text-base text-white">Profile & KYC</h3>
-            <p className="text-xs text-white/60">Manage Aadhaar, bank details, and statutory APMC licenses.</p>
+            <p className="text-xs text-white/60">Manage account details and active role permissions.</p>
           </div>
         </div>
       </main>
 
       {/* Footer */}
       <footer className="w-full border-t border-white/10 py-6 px-6 text-center text-xs text-white/40">
-        © {new Date().getFullYear()} Agrovia Smart APMC Mandi Ecosystem
+        © {new Date().getFullYear()} Agrovia Smart Mandi Ecosystem
       </footer>
     </div>
   );

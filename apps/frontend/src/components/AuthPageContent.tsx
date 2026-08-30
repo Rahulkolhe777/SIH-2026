@@ -14,46 +14,56 @@ import {
   Sprout,
   Landmark,
 } from "lucide-react";
+import { useAppDispatch, useAppSelector } from "../store";
+import {
+  clearAuthMessages,
+  loginUserThunk,
+  registerUserThunk,
+  sendOtpThunk,
+  verifyOtpThunk,
+} from "../store/slices/authSlice";
+import type { Role } from "../interfaces";
 
-type RoleType = "FARMER" | "MANDI_OPERATOR";
 type AuthMode = "LOGIN" | "REGISTER";
 type LoginMethod = "PASSWORD" | "OTP";
 
 interface AuthProps {
   initialMode?: AuthMode;
-  onSuccess?: (userData: any) => void;
+  onSuccess?: () => void;
 }
 
 const roles = [
   {
-    id: "FARMER" as RoleType,
+    id: "FARMER" as Role,
     label: "Farmer",
     icon: Sprout,
     desc: "Book mandi unloading slots & digital tokens",
   },
   {
-    id: "MANDI_OPERATOR" as RoleType,
+    id: "MANDI_OPERATOR" as Role,
     label: "Mandi Operator",
     icon: Landmark,
-    desc: "Gate verification & weighment management",
+    desc: "Manage slots, gate entry & weighbridge",
   },
 ];
 
-const API_BASE_URL = (typeof window !== "undefined" && (window as any).__API_URL__) || "http://localhost:4000";
-
 export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps) {
+  const dispatch = useAppDispatch();
+  const { isLoading, otpSent, error, successMessage, isAuthenticated } = useAppSelector(
+    (state) => state.auth
+  );
+
   const [authMode, setAuthMode] = useState<AuthMode>(initialMode);
-  const [selectedRole, setSelectedRole] = useState<RoleType>("FARMER");
+  const [selectedRole, setSelectedRole] = useState<Role>("FARMER");
   const [loginMethod, setLoginMethod] = useState<LoginMethod>("PASSWORD");
 
-  // Login form state
+  // Login Form
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [otpCode, setOtpCode] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Register form state
+  // Register Form (Simple and uniform for both Farmer & Mandi Operator)
   const [fullName, setFullName] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [regPhone, setRegPhone] = useState("");
@@ -61,9 +71,6 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
   const [regPassword, setRegPassword] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
 
-  // UI state
-  const [isLoading, setIsLoading] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [scrollY, setScrollY] = useState(0);
 
   useEffect(() => {
@@ -72,189 +79,66 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // When authenticated, trigger onSuccess or redirect to dashboard
+  useEffect(() => {
+    if (isAuthenticated) {
+      const timer = setTimeout(() => {
+        if (onSuccess) onSuccess();
+        else window.location.href = "/dashboard";
+      }, 700);
+      return () => clearTimeout(timer);
+    }
+  }, [isAuthenticated, onSuccess]);
+
   const switchMode = (mode: AuthMode) => {
     setAuthMode(mode);
-    setStatusMessage(null);
+    dispatch(clearAuthMessages());
     window.history.pushState({}, "", mode === "LOGIN" ? "/login" : "/register");
   };
 
-  const handleSendOtp = async (e: React.FormEvent) => {
+  const handleSendOtp = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!identifier.trim()) {
-      setStatusMessage({ type: "error", text: "Please enter your mobile number or email." });
-      return;
-    }
-    setIsLoading(true);
-    setStatusMessage(null);
+    if (!identifier.trim()) return;
+    dispatch(sendOtpThunk({ identifier, type: "LOGIN" }));
+  };
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/auth/otp/send`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier, type: "LOGIN" }),
-      });
-      const data = await response.json();
-      if (response.ok && data.success) {
-        setOtpSent(true);
-        setStatusMessage({ type: "success", text: `OTP verification code sent to ${identifier}` });
-      } else {
-        // Fallback simulation for dev/offline mode
-        setOtpSent(true);
-        setStatusMessage({ type: "success", text: `OTP verification code sent to ${identifier} (Dev Mode)` });
-      }
-    } catch {
-      setOtpSent(true);
-      setStatusMessage({ type: "success", text: `OTP verification code sent to ${identifier}` });
-    } finally {
-      setIsLoading(false);
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    dispatch(clearAuthMessages());
+
+    if (!identifier.trim()) return;
+
+    if (loginMethod === "PASSWORD") {
+      if (!password) return;
+      dispatch(loginUserThunk({ identifier, password }));
+    } else {
+      if (!otpCode) return;
+      dispatch(verifyOtpThunk({ identifier, code: otpCode, type: "LOGIN" }));
     }
   };
 
-  const handleLoginSubmit = async (e: React.FormEvent) => {
+  const handleRegisterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setStatusMessage(null);
+    dispatch(clearAuthMessages());
 
-    if (!identifier.trim()) {
-      setStatusMessage({ type: "error", text: "Please enter your registered email or mobile number." });
+    if (!fullName.trim() || (!regEmail.trim() && !regPhone.trim()) || regPassword.length < 8) {
       return;
     }
 
-    if (loginMethod === "PASSWORD" && !password) {
-      setStatusMessage({ type: "error", text: "Please enter your password." });
-      return;
-    }
-
-    if (loginMethod === "OTP" && !otpCode) {
-      setStatusMessage({ type: "error", text: "Please enter the 6-digit OTP code." });
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      let endpoint = `${API_BASE_URL}/api/v1/auth/login`;
-      let body: any = { identifier, password };
-
-      if (loginMethod === "OTP") {
-        endpoint = `${API_BASE_URL}/api/v1/auth/otp/verify`;
-        body = { identifier, code: otpCode, type: "LOGIN" };
-      }
-
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      const resData = await response.json();
-
-      if (response.ok && resData.success) {
-        if (resData.data?.accessToken) {
-          localStorage.setItem("mandi_access_token", resData.data.accessToken);
-        }
-        if (resData.data?.user) {
-          localStorage.setItem("mandi_current_user", JSON.stringify(resData.data.user));
-        }
-        setStatusMessage({
-          type: "success",
-          text: `Welcome back, ${resData.data?.user?.name || "User"}! Redirecting...`,
-        });
-        setTimeout(() => {
-          if (onSuccess) onSuccess(resData.data?.user);
-          else window.location.href = "/dashboard";
-        }, 800);
-      } else {
-        // Fallback for mock/offline testing
-        const mockUser = { name: "Farmer Patel", role: selectedRole, email: identifier };
-        localStorage.setItem("mandi_current_user", JSON.stringify(mockUser));
-        setStatusMessage({
-          type: "success",
-          text: `Authentication successful! Redirecting to ${roles.find((r) => r.id === selectedRole)?.label} portal...`,
-        });
-        setTimeout(() => {
-          if (onSuccess) onSuccess(mockUser);
-          else window.location.href = "/dashboard";
-        }, 800);
-      }
-    } catch {
-      const mockUser = { name: "Farmer Patel", role: selectedRole, email: identifier };
-      localStorage.setItem("mandi_current_user", JSON.stringify(mockUser));
-      setStatusMessage({
-        type: "success",
-        text: `Logged in in offline mode. Redirecting...`,
-      });
-      setTimeout(() => {
-        if (onSuccess) onSuccess(mockUser);
-        else window.location.href = "/dashboard";
-      }, 800);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleRegisterSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setStatusMessage(null);
-
-    if (!fullName.trim()) {
-      setStatusMessage({ type: "error", text: "Please enter your full name." });
-      return;
-    }
-
-    if (!regEmail.trim() && !regPhone.trim()) {
-      setStatusMessage({ type: "error", text: "Please provide an email or phone number." });
-      return;
-    }
-
-    if (regPassword.length < 8) {
-      setStatusMessage({ type: "error", text: "Password must be at least 8 characters long." });
-      return;
-    }
-
-    if (!termsAccepted) {
-      setStatusMessage({ type: "error", text: "Please agree to APMC compliance guidelines." });
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: fullName,
-          email: regEmail,
-          phone: regPhone,
-          password: regPassword,
-          role: selectedRole,
-        }),
-      });
-
-      const resData = await response.json();
-
-      if (response.ok && resData.success) {
-        setStatusMessage({
-          type: "success",
-          text: `Account created for ${fullName}! Please sign in with your credentials.`,
-        });
-        setTimeout(() => switchMode("LOGIN"), 1200);
-      } else {
-        setStatusMessage({
-          type: "success",
-          text: `Account created successfully for ${fullName}! Please sign in.`,
-        });
+    dispatch(
+      registerUserThunk({
+        name: fullName,
+        email: regEmail,
+        phone: regPhone,
+        password: regPassword,
+        role: selectedRole,
+        location,
+      })
+    ).then((action: any) => {
+      if (!action.error) {
         setTimeout(() => switchMode("LOGIN"), 1200);
       }
-    } catch {
-      setStatusMessage({
-        type: "success",
-        text: `Account created for ${fullName}! Please sign in with your password.`,
-      });
-      setTimeout(() => switchMode("LOGIN"), 1200);
-    } finally {
-      setIsLoading(false);
-    }
+    });
   };
 
   return (
@@ -279,10 +163,8 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
       <div className="absolute bottom-0 left-0 right-0 h-[600px] bg-gradient-to-t from-[#05160C] via-[#05160C]/80 to-transparent pointer-events-none z-10" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_40%,_rgba(5,22,12,0.6)_100%)] pointer-events-none z-10" />
 
-
-
       {/* CENTER: Main Container with Landing Typography & Stacked Glass Card */}
-      <main className="relative z-20 w-full px-4 sm:px-6 md:px-12 lg:px-16 py-10 md:py-14 my-auto flex flex-col items-center">
+      <main className="relative z-20 w-full px-4 sm:px-6 md:px-12 lg:px-16 py-12 md:py-16 my-auto flex flex-col items-center">
         <div className="w-full max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
           
           {/* Left Column: Hero-Styled Statement */}
@@ -290,7 +172,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
             {/* Pill Badge */}
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/35 backdrop-blur-md border border-white/20 text-xs font-medium text-white shadow-lg">
               <span className="w-2 h-2 rounded-full bg-[#C8F52F] animate-pulse" />
-              <span>DoCA APMC Verified Gateway</span>
+              <span>Smart Mandi Portal</span>
             </div>
 
             {/* Editorial Heading matching Hero */}
@@ -308,8 +190,8 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
 
             <p className="text-white/80 text-sm sm:text-base leading-relaxed max-w-md font-light">
               {authMode === "LOGIN"
-                ? "Sign in to book real-time mandi unloading slots, track gate entry QR tokens, and access live commodity rates."
-                : "Create an account in under 2 minutes to eliminate mandi waiting lines, verify digital tokens, and receive direct payments."}
+                ? "Sign in to book real-time mandi unloading slots, track gate entry QR tokens, and access live rates."
+                : "Create an account in under 2 minutes to eliminate waiting lines, verify digital tokens, and receive payments."}
             </p>
 
             {/* Features Highlight */}
@@ -318,19 +200,19 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                 <div className="w-5 h-5 rounded-full bg-[#C8F52F]/20 flex items-center justify-center text-[#C8F52F] shrink-0">
                   <Check className="w-3.5 h-3.5 stroke-[3]" />
                 </div>
-                <span>Zero overnight waiting with automated gate entry tokens</span>
+                <span>Zero gate waiting with automated digital tokens</span>
               </div>
               <div className="flex items-center gap-3 text-sm text-white/90">
                 <div className="w-5 h-5 rounded-full bg-[#C8F52F]/20 flex items-center justify-center text-[#C8F52F] shrink-0">
                   <Check className="w-3.5 h-3.5 stroke-[3]" />
                 </div>
-                <span>Direct e-weighbridge sync with fair automated slip generation</span>
+                <span>Automated weighbridge sync with instant slip generation</span>
               </div>
               <div className="flex items-center gap-3 text-sm text-white/90">
                 <div className="w-5 h-5 rounded-full bg-[#C8F52F]/20 flex items-center justify-center text-[#C8F52F] shrink-0">
                   <Check className="w-3.5 h-3.5 stroke-[3]" />
                 </div>
-                <span>Unified APMC access across 48+ verified mandis</span>
+                <span>Direct real-time slot scheduling across all active yards</span>
               </div>
             </div>
           </div>
@@ -370,7 +252,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
               {/* Role Selection Matrix (Farmer & Mandi Operator Only, No Emojis) */}
               <div className="mb-6 space-y-2 text-left">
                 <label className="text-xs font-medium text-white/70 uppercase tracking-wider block">
-                  Select Your Role
+                  Select Role
                 </label>
                 <div className="grid grid-cols-2 gap-3">
                   {roles.map((role) => {
@@ -421,17 +303,17 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                 </div>
               </div>
 
-              {/* Status Alert */}
-              {statusMessage && (
-                <div
-                  className={`mb-5 p-3.5 rounded-2xl text-xs font-medium border flex items-center gap-2 ${
-                    statusMessage.type === "success"
-                      ? "bg-[#C8F52F]/15 border-[#C8F52F]/40 text-[#C8F52F]"
-                      : "bg-red-500/20 border-red-500/30 text-red-200"
-                  }`}
-                >
+              {/* Status Alert from Redux */}
+              {error && (
+                <div className="mb-5 p-3.5 rounded-2xl text-xs font-medium border flex items-center gap-2 bg-red-500/20 border-red-500/30 text-red-200">
                   <ShieldCheck className="w-4 h-4 shrink-0" />
-                  <span>{statusMessage.text}</span>
+                  <span>{error}</span>
+                </div>
+              )}
+              {successMessage && (
+                <div className="mb-5 p-3.5 rounded-2xl text-xs font-medium border flex items-center gap-2 bg-[#C8F52F]/15 border-[#C8F52F]/40 text-[#C8F52F]">
+                  <ShieldCheck className="w-4 h-4 shrink-0" />
+                  <span>{successMessage}</span>
                 </div>
               )}
 
@@ -460,7 +342,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                           : "border-transparent text-white/50 hover:text-white"
                       }`}
                     >
-                      Instant Phone OTP
+                      Phone OTP
                     </button>
                   </div>
 
@@ -523,7 +405,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
                         <label className="text-xs font-medium text-white/70">
-                          Enter 6-Digit Code
+                          Enter 6-Digit OTP Code
                         </label>
                         <button
                           type="button"
@@ -555,12 +437,12 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                       <div className="w-5 h-5 border-2 border-[#0B2D1B] border-t-transparent rounded-full animate-spin" />
                     ) : loginMethod === "OTP" && !otpSent ? (
                       <>
-                        <span>Get Verification Code</span>
+                        <span>Get OTP Code</span>
                         <ArrowUpRight size={18} strokeWidth={2.5} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                       </>
                     ) : (
                       <>
-                        <span>Access {roles.find((r) => r.id === selectedRole)?.label} Dashboard</span>
+                        <span>Sign In as {roles.find((r) => r.id === selectedRole)?.label}</span>
                         <ArrowUpRight size={18} strokeWidth={2.5} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                       </>
                     )}
@@ -568,13 +450,13 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                 </form>
               )}
 
-              {/* REGISTER FORM */}
+              {/* REGISTER FORM (Clean, uniform fields for both Farmer & Mandi Operator) */}
               {authMode === "REGISTER" && (
                 <form onSubmit={handleRegisterSubmit} className="space-y-3.5 text-left">
                   {/* Full Name */}
                   <div>
                     <label className="text-xs font-medium text-white/70 mb-1 block">
-                      Full Legal Name
+                      Full Name
                     </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-white/40">
@@ -584,7 +466,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                         type="text"
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
-                        placeholder="Ramesh Patel"
+                        placeholder="e.g. Ramesh Patel"
                         className="w-full pl-11 pr-4 py-3 bg-white/[0.07] border border-white/20 focus:border-[#C8F52F] rounded-full text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-[#C8F52F] transition-all"
                         required
                       />
@@ -605,7 +487,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                           type="email"
                           value={regEmail}
                           onChange={(e) => setRegEmail(e.target.value)}
-                          placeholder="patel@farm.in"
+                          placeholder="name@agrovia.in"
                           className="w-full pl-11 pr-3 py-3 bg-white/[0.07] border border-white/20 focus:border-[#C8F52F] rounded-full text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-[#C8F52F] transition-all"
                           required
                         />
@@ -632,12 +514,10 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                     </div>
                   </div>
 
-                  {/* Location / Yard */}
+                  {/* Location / Mandi Area */}
                   <div>
                     <label className="text-xs font-medium text-white/70 mb-1 block">
-                      {selectedRole === "FARMER"
-                        ? "Village, District & State"
-                        : "APMC Mandi Operating Location"}
+                      {selectedRole === "FARMER" ? "Village / District" : "Mandi Yard / City"}
                     </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-white/40">
@@ -647,11 +527,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                         type="text"
                         value={location}
                         onChange={(e) => setLocation(e.target.value)}
-                        placeholder={
-                          selectedRole === "FARMER"
-                            ? "Sanwer, Indore, Madhya Pradesh"
-                            : "APMC Yard Gate #3, Indore"
-                        }
+                        placeholder={selectedRole === "FARMER" ? "e.g. Sanwer, Indore" : "e.g. Grain Market Yard, Indore"}
                         className="w-full pl-11 pr-4 py-3 bg-white/[0.07] border border-white/20 focus:border-[#C8F52F] rounded-full text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-[#C8F52F] transition-all"
                       />
                     </div>
@@ -660,7 +536,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                   {/* Password */}
                   <div>
                     <label className="text-xs font-medium text-white/70 mb-1 block">
-                      Password (min 8 characters)
+                      Password (minimum 8 characters)
                     </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-white/40">
@@ -694,7 +570,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                       required
                     />
                     <span>
-                      I agree to APMC trade policies and digital token rules.
+                      I agree to the Terms of Service and Privacy Policy.
                     </span>
                   </label>
 
@@ -708,7 +584,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                       <div className="w-5 h-5 border-2 border-[#0B2D1B] border-t-transparent rounded-full animate-spin" />
                     ) : (
                       <>
-                        <span>Complete Registration</span>
+                        <span>Create {roles.find((r) => r.id === selectedRole)?.label} Account</span>
                         <ArrowUpRight size={18} strokeWidth={2.5} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                       </>
                     )}
@@ -724,7 +600,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
       <footer className="relative z-20 w-full px-6 sm:px-8 md:px-12 lg:px-16 pb-6 md:pb-8">
         <div className="max-w-7xl mx-auto pt-4 border-t border-white/15 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="text-white/60 text-xs">
-            © {new Date().getFullYear()} Agrovia APMC Mandi Systems • 256-Bit Encrypted
+            © {new Date().getFullYear()} Agrovia Mandi Platform • Encrypted & Secure
           </div>
 
           <div className="flex items-center gap-3 bg-black/35 backdrop-blur-md border border-white/15 px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full shadow-lg">
@@ -744,7 +620,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
               </div>
             </div>
             <span className="text-white/80 text-[11px] sm:text-xs font-light pl-1">
-              12,400+ Active Farmers
+              12,400+ Active Users
             </span>
           </div>
         </div>
