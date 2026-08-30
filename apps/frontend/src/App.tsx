@@ -1,19 +1,14 @@
 import React, { useState, useEffect } from "react";
-import type { User, MandiSlot, Booking, MandiProfile, DashboardMetrics } from "./types/mandi.types";
-import { initialSlots, initialBookings, initialMandiProfile } from "./services/mockData";
-import { apiRequest, clearTokens } from "./services/api";
-import { Navbar } from "./components/Navbar";
-import { Sidebar, type TabType } from "./components/Sidebar";
-import { AuthPage } from "./pages/AuthPage";
-import { DashboardPage } from "./pages/DashboardPage";
-import { SlotsPage } from "./pages/SlotsPage";
-import { SettingsPage } from "./pages/SettingsPage";
-import { APITesterPage } from "./pages/APITesterPage";
+import { AuthPageContent } from "./components/AuthPageContent";
+import { LogOut, User, ShieldCheck, Sprout, Landmark, ArrowRight, LayoutDashboard, QrCode } from "lucide-react";
 import "./index.css";
 
 export function App() {
-  // Authentication State
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+  const [currentPath, setCurrentPath] = useState<string>(() => {
+    return typeof window !== "undefined" ? window.location.pathname : "/login";
+  });
+
+  const [currentUser, setCurrentUser] = useState<any>(() => {
     try {
       const saved = localStorage.getItem("mandi_current_user");
       return saved ? JSON.parse(saved) : null;
@@ -22,354 +17,132 @@ export function App() {
     }
   });
 
-  // Mock vs Live API Mode
-  const [useMock, setUseMock] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem("mandi_use_mock") !== "false";
-    } catch {
-      return true;
-    }
-  });
-
-  const [apiConnected, setApiConnected] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<TabType>("dashboard");
-
-  // Application Data State with resilient fallbacks
-  const [slots, setSlots] = useState<MandiSlot[]>(() => {
-    try {
-      const saved = localStorage.getItem("mandi_slots_data");
-      const parsed = saved ? JSON.parse(saved) : null;
-      return Array.isArray(parsed) && parsed.length > 0 ? parsed : initialSlots;
-    } catch {
-      return initialSlots;
-    }
-  });
-
-  const [bookings, setBookings] = useState<Booking[]>(() => {
-    try {
-      const saved = localStorage.getItem("mandi_bookings_data");
-      const parsed = saved ? JSON.parse(saved) : null;
-      return Array.isArray(parsed) && parsed.length > 0 ? parsed : initialBookings;
-    } catch {
-      return initialBookings;
-    }
-  });
-
-  const [profile, setProfile] = useState<MandiProfile>(() => {
-    try {
-      const saved = localStorage.getItem("mandi_profile_data");
-      const parsed = saved ? JSON.parse(saved) : null;
-      return parsed && typeof parsed === "object"
-        ? {
-            ...initialMandiProfile,
-            ...parsed,
-            rating: parsed.rating ?? initialMandiProfile.rating,
-            totalReviews: parsed.totalReviews ?? initialMandiProfile.totalReviews,
-            legalDocs: Array.isArray(parsed.legalDocs)
-              ? parsed.legalDocs
-              : initialMandiProfile.legalDocs,
-          }
-        : initialMandiProfile;
-    } catch {
-      return initialMandiProfile;
-    }
-  });
-
-  // Persist State to LocalStorage for seamless dev testing
   useEffect(() => {
-    try {
-      localStorage.setItem("mandi_slots_data", JSON.stringify(slots));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [slots]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("mandi_bookings_data", JSON.stringify(bookings));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [bookings]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("mandi_profile_data", JSON.stringify(profile));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [profile]);
-
-  useEffect(() => {
-    try {
-      if (currentUser) {
-        localStorage.setItem("mandi_current_user", JSON.stringify(currentUser));
-      } else {
-        localStorage.removeItem("mandi_current_user");
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  }, [currentUser]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("mandi_use_mock", String(useMock));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [useMock]);
-
-  // Ping backend server to test connectivity
-  const testBackendConnection = async () => {
-    try {
-      const res = await apiRequest("/health");
-      if (res.status === 200 || res.success) {
-        setApiConnected(true);
-        return;
-      }
-      const rawRes = await fetch("http://localhost:4000/health").catch(() => null);
-      setApiConnected(rawRes?.status === 200);
-    } catch {
-      try {
-        const rawRes = await fetch("http://localhost:4000/health").catch(() => null);
-        setApiConnected(rawRes?.status === 200);
-      } catch {
-        setApiConnected(false);
-      }
-    }
-  };
-
-  useEffect(() => {
-    testBackendConnection();
-    const interval = setInterval(testBackendConnection, 15000);
-    return () => clearInterval(interval);
+    const handlePopState = () => {
+      setCurrentPath(window.location.pathname);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  // Compute live dashboard metrics safely
-  const todayStr = (new Date().toISOString().split("T")[0] as string) || "2026-08-30";
-  const safeSlots = Array.isArray(slots) ? slots : [];
-  const safeBookings = Array.isArray(bookings) ? bookings : [];
-
-  const todaySlots = safeSlots.filter((s) => s.date === todayStr);
-  const activeBookingsCount = safeBookings.filter((b) =>
-    ["PENDING", "ACCEPTED", "ARRIVED", "VERIFIED"].includes(b.status)
-  ).length;
-  const arrivalsTodayCount = safeBookings.filter(
-    (b) => b.slotDate === todayStr && ["ARRIVED", "VERIFIED", "COMPLETED"].includes(b.status)
-  ).length;
-  const completedTodayCount = safeBookings.filter(
-    (b) => b.slotDate === todayStr && b.status === "COMPLETED"
-  ).length;
-  const pendingApprovalsCount = safeBookings.filter((b) => b.status === "PENDING").length;
-
-  const totalCap = safeSlots.reduce((sum, s) => sum + (Number(s.totalCapacityQuintals) || 0), 0);
-  const bookedCap = safeSlots.reduce((sum, s) => sum + (Number(s.bookedCapacityQuintals) || 0), 0);
-  const totalCapacityPercentage = totalCap > 0 ? (bookedCap / totalCap) * 100 : 0;
-
-  const metrics: DashboardMetrics = {
-    totalSlotsToday: todaySlots.length > 0 ? todaySlots.length : safeSlots.length,
-    activeBookings: activeBookingsCount,
-    arrivalsToday: arrivalsTodayCount,
-    completedToday: completedTodayCount,
-    pendingApprovals: pendingApprovalsCount,
-    totalCapacityUtilizedPercentage: Number(totalCapacityPercentage.toFixed(1)),
-  };
-
-  // Auth Handlers
-  const handleLoginSuccess = (user: User) => {
-    setCurrentUser(user);
-    setActiveTab("dashboard");
-  };
-
   const handleLogout = () => {
-    clearTokens();
+    localStorage.removeItem("mandi_current_user");
+    localStorage.removeItem("mandi_access_token");
     setCurrentUser(null);
+    window.history.pushState({}, "", "/login");
+    setCurrentPath("/login");
   };
 
-  // Booking Handlers
-  const handleUpdateBookingStatus = (
-    id: string,
-    status: Booking["status"],
-    notes?: string
-  ) => {
-    setBookings((prev) =>
-      (prev || []).map((b) => {
-        if (b.id !== id) return b;
-        return {
-          ...b,
-          status,
-          notes: notes || b.notes,
-          verifiedAt: status === "VERIFIED" ? new Date().toISOString() : b.verifiedAt,
-          completedAt: status === "COMPLETED" ? new Date().toISOString() : b.completedAt,
-        };
-      })
-    );
+  const handleAuthSuccess = (userData: any) => {
+    setCurrentUser(userData);
+    window.history.pushState({}, "", "/dashboard");
+    setCurrentPath("/dashboard");
   };
 
-  const handleQuickVerifyToken = (tokenOrId: string) => {
-    const q = (tokenOrId || "").toLowerCase();
-    const found = (bookings || []).find(
-      (b) => (b.token || "").toLowerCase() === q || (b.id || "").toLowerCase() === q
-    );
-    return { found: !!found, booking: found };
-  };
+  // If user is not authenticated or explicitly on /login or /register
+  if (!currentUser || currentPath === "/login" || currentPath === "/register") {
+    const initialMode = currentPath === "/register" ? "REGISTER" : "LOGIN";
+    return <AuthPageContent initialMode={initialMode} onSuccess={handleAuthSuccess} />;
+  }
 
-  // Slot Handlers
-  const handleCreateSlot = (
-    newSlotData: Omit<
-      MandiSlot,
-      "id" | "bookedCapacityQuintals" | "capacityPercentage" | "bookedFarmers" | "availableBookings"
-    >
-  ) => {
-    const id = `slot-${Math.floor(100 + Math.random() * 900)}`;
-    const newSlot: MandiSlot = {
-      ...newSlotData,
-      id,
-      bookedCapacityQuintals: 0,
-      capacityPercentage: 0,
-      bookedFarmers: 0,
-      availableBookings: newSlotData.maxFarmers,
-      isActive: true,
-    };
-    setSlots((prev) => [newSlot, ...(prev || [])]);
-  };
-
-  const handleUpdateSlot = (id: string, updated: Partial<MandiSlot>) => {
-    setSlots((prev) =>
-      (prev || []).map((s) => {
-        if (s.id !== id) return s;
-        const total = updated.totalCapacityQuintals ?? s.totalCapacityQuintals;
-        const booked = updated.bookedCapacityQuintals ?? s.bookedCapacityQuintals;
-        const pct = total > 0 ? (booked / total) * 100 : 0;
-        const maxF = updated.maxFarmers ?? s.maxFarmers;
-        const bookedF = updated.bookedFarmers ?? s.bookedFarmers;
-
-        return {
-          ...s,
-          ...updated,
-          capacityPercentage: Number(pct.toFixed(1)),
-          availableBookings: Math.max(0, maxF - bookedF),
-        };
-      })
-    );
-  };
-
-  const handleDeleteSlot = (id: string) => {
-    // Cascade cancel/reject all bookings associated with deleted slot
-    setBookings((prev) =>
-      (prev || []).map((b) => {
-        if (b.slotId === id && b.status !== "COMPLETED") {
-          return {
-            ...b,
-            status: "CANCELLED" as const,
-            notes: "Slot cancelled by Mandi Operator.",
-          };
-        }
-        return b;
-      })
-    );
-    setSlots((prev) => (prev || []).filter((s) => s.id !== id));
-  };
-
-  const handleApplyDefaultSlotsPreset = () => {
-    const tomorrow = (new Date(Date.now() + 86400000).toISOString().split("T")[0] as string) || "2026-08-31";
-    const presets: MandiSlot[] = [
-      {
-        id: `slot-${Math.floor(100 + Math.random() * 900)}`,
-        crop: "Wheat (Sharbati)",
-        date: tomorrow,
-        startTime: "08:00",
-        endTime: "11:30",
-        totalCapacityQuintals: 600,
-        bookedCapacityQuintals: 0,
-        capacityPercentage: 0,
-        maxFarmers: 25,
-        bookedFarmers: 0,
-        availableBookings: 25,
-        bufferMinutes: 15,
-        bufferPercentage: 10,
-        isActive: true,
-      },
-      {
-        id: `slot-${Math.floor(100 + Math.random() * 900)}`,
-        crop: "Mustard (Sarson)",
-        date: tomorrow,
-        startTime: "12:00",
-        endTime: "15:30",
-        totalCapacityQuintals: 400,
-        bookedCapacityQuintals: 0,
-        capacityPercentage: 0,
-        maxFarmers: 18,
-        bookedFarmers: 0,
-        availableBookings: 18,
-        bufferMinutes: 20,
-        bufferPercentage: 10,
-        isActive: true,
-      },
-    ];
-    setSlots((prev) => [...presets, ...(prev || [])]);
-  };
-
+  // Authenticated Portal View
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
-      {/* Top Navigation */}
-      <Navbar
-        user={currentUser}
-        useMock={useMock}
-        onToggleMock={() => setUseMock((prev) => !prev)}
-        onLogout={handleLogout}
-        apiConnected={apiConnected}
-        onTestConnection={testBackendConnection}
-      />
-
-      {/* Main Container */}
-      {!currentUser ? (
-        <AuthPage onLoginSuccess={handleLoginSuccess} useMock={useMock} />
-      ) : (
-        <div className="flex-1 flex flex-col md:flex-row">
-          {/* Sidebar */}
-          <Sidebar
-            activeTab={activeTab}
-            onSelectTab={setActiveTab}
-            pendingCount={pendingApprovalsCount}
-          />
-
-          {/* Main Content Area */}
-          <main className="flex-1 p-6 md:p-8 max-w-7xl mx-auto w-full overflow-y-auto">
-            {activeTab === "dashboard" && (
-              <DashboardPage
-                bookings={safeBookings}
-                slots={safeSlots}
-                metrics={metrics}
-                isApproved={currentUser?.approvalStatus === "APPROVED"}
-                approvalStatus={currentUser?.approvalStatus || "PENDING_ONBOARDING"}
-                onGoToSettings={() => setActiveTab("settings")}
-                onUpdateBookingStatus={handleUpdateBookingStatus}
-                onQuickVerifyToken={handleQuickVerifyToken}
-                onApplyDefaultSlotsPreset={handleApplyDefaultSlotsPreset}
-              />
-            )}
-
-            {activeTab === "slots" && (
-              <SlotsPage
-                slots={safeSlots}
-                onCreateSlot={handleCreateSlot}
-                onUpdateSlot={handleUpdateSlot}
-                onDeleteSlot={handleDeleteSlot}
-              />
-            )}
-
-            {activeTab === "settings" && (
-              <SettingsPage profile={profile} onUpdateProfile={setProfile} />
-            )}
-
-            {activeTab === "api-tester" && <APITesterPage />}
-          </main>
+    <div className="min-h-screen bg-[#06180E] text-white flex flex-col justify-between selection:bg-[#C8F52F] selection:text-[#0B2D1B]">
+      {/* Top Header */}
+      <header className="w-full border-b border-white/10 bg-black/30 backdrop-blur-xl px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 bg-[#C8F52F] rounded-xl flex items-center justify-center shadow-md">
+            <svg
+              className="w-5 h-5 text-[#0B2D1B]"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+            >
+              <path d="M7 16h10" />
+              <path d="M9 12h10" />
+              <path d="M5 8h10" />
+            </svg>
+          </div>
+          <div>
+            <span className="font-bold text-lg text-white">Agrovia Mandi Portal</span>
+            <span className="text-xs text-white/50 block">Connected to Live APMC Network</span>
+          </div>
         </div>
-      )}
+
+        <div className="flex items-center gap-4">
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/15 text-xs text-white/80">
+            {currentUser?.role === "MANDI_OPERATOR" ? (
+              <Landmark className="w-3.5 h-3.5 text-[#C8F52F]" />
+            ) : (
+              <Sprout className="w-3.5 h-3.5 text-[#C8F52F]" />
+            )}
+            <span>{currentUser?.name || "Verified User"}</span>
+            <span className="text-white/40">•</span>
+            <span className="text-[#C8F52F] font-semibold">{currentUser?.role || "FARMER"}</span>
+          </div>
+
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition-colors cursor-pointer"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Sign Out</span>
+          </button>
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <main className="max-w-6xl w-full mx-auto px-6 py-12 flex-1 flex flex-col justify-center items-center text-center space-y-8">
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#C8F52F]/15 border border-[#C8F52F]/30 text-xs font-semibold text-[#C8F52F]">
+          <ShieldCheck className="w-4 h-4" />
+          <span>Active APMC Session Authenticated</span>
+        </div>
+
+        <div className="space-y-3 max-w-2xl">
+          <h1 className="text-4xl sm:text-5xl font-normal tracking-tight text-white">
+            Welcome back,{" "}
+            <span className="font-editorial italic text-[#C8F52F]">
+              {currentUser?.name || "Farmer"}
+            </span>
+          </h1>
+          <p className="text-white/70 text-base">
+            Your {currentUser?.role === "MANDI_OPERATOR" ? "APMC Mandi Gate Operator" : "Farmer Unloading"} portal is ready. You can manage tokens, real-time queues, and auction receipts.
+          </p>
+        </div>
+
+        {/* Action Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 w-full max-w-3xl pt-4">
+          <div className="p-6 rounded-3xl bg-white/[0.05] border border-white/10 backdrop-blur-xl text-left space-y-3 hover:border-[#C8F52F]/40 transition-all">
+            <div className="w-10 h-10 rounded-2xl bg-[#C8F52F]/20 text-[#C8F52F] flex items-center justify-center">
+              <QrCode className="w-5 h-5" />
+            </div>
+            <h3 className="font-semibold text-base text-white">Digital Slot Booking</h3>
+            <p className="text-xs text-white/60">Reserve unloading dock time slots with zero gate waiting.</p>
+          </div>
+
+          <div className="p-6 rounded-3xl bg-white/[0.05] border border-white/10 backdrop-blur-xl text-left space-y-3 hover:border-[#C8F52F]/40 transition-all">
+            <div className="w-10 h-10 rounded-2xl bg-[#C8F52F]/20 text-[#C8F52F] flex items-center justify-center">
+              <LayoutDashboard className="w-5 h-5" />
+            </div>
+            <h3 className="font-semibold text-base text-white">Live Queue Monitor</h3>
+            <p className="text-xs text-white/60">Track yard congestion and live weighbridge queue positions.</p>
+          </div>
+
+          <div className="p-6 rounded-3xl bg-white/[0.05] border border-white/10 backdrop-blur-xl text-left space-y-3 hover:border-[#C8F52F]/40 transition-all">
+            <div className="w-10 h-10 rounded-2xl bg-[#C8F52F]/20 text-[#C8F52F] flex items-center justify-center">
+              <User className="w-5 h-5" />
+            </div>
+            <h3 className="font-semibold text-base text-white">Profile & KYC</h3>
+            <p className="text-xs text-white/60">Manage Aadhaar, bank details, and statutory APMC licenses.</p>
+          </div>
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="w-full border-t border-white/10 py-6 px-6 text-center text-xs text-white/40">
+        © {new Date().getFullYear()} Agrovia Smart APMC Mandi Ecosystem
+      </footer>
     </div>
   );
 }
-
-export default App;
