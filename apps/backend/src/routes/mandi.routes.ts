@@ -1,22 +1,123 @@
-import { Router, Request, Response } from "express";
-import { authenticate, requireRole } from "../middlewares/auth.middleware.js";
+import { Router } from "express";
+import { authenticate, requireRole, requireApprovedMandi } from "../middlewares/auth.middleware.js";
+import { validate } from "../middlewares/validate.middleware.js";
 import { Role } from "@prisma/client";
+import * as mandiController from "../controllers/mandi.controller.js";
+import * as mandiSchema from "../schemas/mandi.schema.js";
 
 const router: Router = Router();
 
-// Protect all Mandi routes with authenticate and requireRole(Role.MANDI_OPERATOR)
+// Base protection: All Mandi routes require authenticated MANDI_OPERATOR
 router.use(authenticate, requireRole(Role.MANDI_OPERATOR));
 
-router.get("/dashboard", (req: Request, res: Response) => {
-  res.status(200).json({
-    success: true,
-    message: "Welcome to Mandi Operator Dashboard",
-    data: {
-      userId: req.user!.userId,
-      role: req.user!.role,
-      modules: ["Daily Rate Updates", "Arrival Management", "Auction Records", "Farmer Inquiries"],
-    },
-  });
-});
+// ----------------------------------------------------
+// ONBOARDING, PROFILE & KYC (Allowed during pending status)
+// ----------------------------------------------------
+router.post(
+  "/onboarding",
+  validate(mandiSchema.mandiOnboardingSchema),
+  mandiController.submitOnboardingHandler
+);
+
+router.get("/profile", mandiController.getProfileHandler);
+
+router.put(
+  "/profile",
+  validate(mandiSchema.updateMandiProfileSchema),
+  mandiController.updateProfileHandler
+);
+
+router.post(
+  "/kyc/aadhaar",
+  validate(mandiSchema.aadhaarKycSchema),
+  mandiController.updateAadhaarKycHandler
+);
+
+router.post(
+  "/kyc/documents",
+  validate(mandiSchema.legalDocUploadSchema),
+  mandiController.uploadLegalDocHandler
+);
+
+router.delete("/kyc/documents/:docId", mandiController.deleteLegalDocHandler);
+
+router.get("/rating", mandiController.getRatingHandler);
+
+// ----------------------------------------------------
+// GLANCE DASHBOARD (Accessible to all logged-in Mandi operators)
+// ----------------------------------------------------
+router.get("/dashboard", mandiController.getDashboardStatsHandler);
+
+// ----------------------------------------------------
+// BOOKINGS STREAM & GATE VERIFICATION (Requires Admin Approved Mandi)
+// ----------------------------------------------------
+router.get(
+  "/bookings/current",
+  requireApprovedMandi,
+  validate(mandiSchema.bookingQuerySchema, "query"),
+  mandiController.getCurrentBookingsHandler
+);
+
+router.get(
+  "/bookings/previous",
+  requireApprovedMandi,
+  validate(mandiSchema.bookingQuerySchema, "query"),
+  mandiController.getPreviousBookingsHandler
+);
+
+router.patch(
+  "/bookings/:id/status",
+  requireApprovedMandi,
+  validate(mandiSchema.updateBookingStatusSchema),
+  mandiController.updateBookingStatusHandler
+);
+
+router.post(
+  "/bookings/verify",
+  requireApprovedMandi,
+  validate(mandiSchema.verifyQrTokenSchema),
+  mandiController.verifyBookingTokenHandler
+);
+
+router.patch(
+  "/bookings/:id/complete",
+  requireApprovedMandi,
+  validate(mandiSchema.completeBookingSchema),
+  mandiController.completeBookingHandler
+);
+
+// ----------------------------------------------------
+// ARRIVAL SLOTS MANAGEMENT (Requires Admin Approved Mandi)
+// ----------------------------------------------------
+router.post(
+  "/slots",
+  requireApprovedMandi,
+  validate(mandiSchema.createSlotSchema),
+  mandiController.createSlotHandler
+);
+
+router.get(
+  "/slots",
+  requireApprovedMandi,
+  validate(mandiSchema.slotQuerySchema, "query"),
+  mandiController.getSlotsHandler
+);
+
+router.get("/slots/:id", requireApprovedMandi, mandiController.getSlotByIdHandler);
+
+router.put(
+  "/slots/:id",
+  requireApprovedMandi,
+  validate(mandiSchema.updateSlotSchema),
+  mandiController.updateSlotHandler
+);
+
+router.delete("/slots/:id", requireApprovedMandi, mandiController.deleteSlotHandler);
+
+router.post(
+  "/slots/default-preset",
+  requireApprovedMandi,
+  mandiController.applyDefaultSlotsPresetHandler
+);
 
 export default router;

@@ -5,6 +5,7 @@ import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import farmerRoutes from "./routes/farmer.routes.js";
 import mandiRoutes from "./routes/mandi.routes.js";
+import adminRoutes from "./routes/admin.routes.js";
 import { errorHandler } from "./middlewares/errorHandler.middleware.js";
 import { env } from "./config/env.js";
 
@@ -24,21 +25,25 @@ export function createApp(): Express {
   app.use(express.json({ limit: "1mb" }));
   app.use(express.urlencoded({ extended: true }));
 
-  // Health check endpoint
-  app.get("/health", (req, res) => {
+  // Health check endpoints
+  const healthHandler = (req: express.Request, res: express.Response) => {
     res.status(200).json({
       status: "ok",
-      service: "SIH Backend Auth API",
+      service: "SIH Backend API",
       timestamp: new Date().toISOString(),
       environment: env.NODE_ENV,
     });
-  });
+  };
+
+  app.get("/health", healthHandler);
+  app.get("/api/v1/health", healthHandler);
 
   // API Routes v1
   app.use("/api/v1/auth", authRoutes);
   app.use("/api/v1/user", userRoutes);
   app.use("/api/v1/farmer", farmerRoutes);
   app.use("/api/v1/mandi", mandiRoutes);
+  app.use("/api/v1/admin", adminRoutes);
 
   // 404 handler
   app.use("*", (req, res) => {
