@@ -25,8 +25,9 @@ import {
   sendOtpThunk,
   verifyOtpThunk,
   setPendingVerification,
+  clearPendingVerification,
 } from "../store/slices/authSlice";
-import type { Role, OtpVerificationType } from "../interfaces";
+import type { Role } from "../interfaces";
 
 type AuthMode = "LOGIN" | "REGISTER" | "OTP_VERIFY";
 type LoginMethod = "PASSWORD" | "OTP";
@@ -62,7 +63,11 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
     pendingOtpType,
   } = useAppSelector((state) => state.auth);
 
-  const [authMode, setAuthMode] = useState<AuthMode>(initialMode);
+  // If pendingIdentifier is already set in Redux, default to OTP_VERIFY
+  const [authMode, setAuthMode] = useState<AuthMode>(() => {
+    return pendingIdentifier ? "OTP_VERIFY" : initialMode;
+  });
+
   const [selectedRole, setSelectedRole] = useState<Role>("FARMER");
   const [loginMethod, setLoginMethod] = useState<LoginMethod>("PASSWORD");
 
@@ -103,12 +108,11 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
     }
   }, [isAuthenticated, onSuccess]);
 
-  // When pendingIdentifier is set in Redux, automatically switch to OTP_VERIFY view
+  // When pendingIdentifier is set in Redux, ALWAYS switch to OTP_VERIFY view
   useEffect(() => {
     if (pendingIdentifier && authMode !== "OTP_VERIFY") {
       setAuthMode("OTP_VERIFY");
       setResendCountdown(60);
-      // Focus first OTP input
       setTimeout(() => {
         inputRefs.current[0]?.focus();
       }, 300);
@@ -127,8 +131,13 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
   const switchMode = (mode: AuthMode) => {
     setAuthMode(mode);
     dispatch(clearAuthMessages());
-    if (mode === "LOGIN") window.history.pushState({}, "", "/login");
-    else if (mode === "REGISTER") window.history.pushState({}, "", "/register");
+    if (mode === "LOGIN") {
+      dispatch(clearPendingVerification());
+      window.history.pushState({}, "", "/login");
+    } else if (mode === "REGISTER") {
+      dispatch(clearPendingVerification());
+      window.history.pushState({}, "", "/register");
+    }
   };
 
   // Handle individual OTP digit typing and auto-focus
@@ -138,15 +147,15 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
     newDigits[index] = cleanVal;
     setOtpDigits(newDigits);
 
-    // Auto-advance
+    // Auto-advance to next box
     if (cleanVal && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
 
-    // Auto-submit if all 6 digits filled
+    // Auto-submit when all 6 digits filled
     const fullCode = newDigits.join("");
     if (fullCode.length === 6 && !newDigits.includes("")) {
-      const activeId = pendingIdentifier || identifier || regEmail;
+      const activeId = pendingIdentifier || identifier.trim() || regEmail.trim();
       dispatch(
         verifyOtpThunk({
           identifier: activeId,
@@ -169,14 +178,14 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
     if (!pasted) return;
 
     const newDigits = [...otpDigits];
-    for (let i = 0; i < pasted.length; i++) {
+    for (let i = 0; i < 6; i++) {
       newDigits[i] = pasted[i] || "";
     }
     setOtpDigits(newDigits);
 
     if (pasted.length === 6) {
       inputRefs.current[5]?.focus();
-      const activeId = pendingIdentifier || identifier || regEmail;
+      const activeId = pendingIdentifier || identifier.trim() || regEmail.trim();
       dispatch(
         verifyOtpThunk({
           identifier: activeId,
@@ -192,6 +201,17 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
   const handleSendOtp = (e: React.FormEvent) => {
     e.preventDefault();
     if (!identifier.trim()) return;
+
+    // Immediately show OTP view and dispatch
+    dispatch(
+      setPendingVerification({
+        identifier: identifier.trim(),
+        type: "LOGIN_OTP",
+      })
+    );
+    setAuthMode("OTP_VERIFY");
+    setResendCountdown(60);
+
     dispatch(
       sendOtpThunk({
         identifier: identifier.trim(),
@@ -201,7 +221,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
   };
 
   const handleResendOtp = () => {
-    const activeId = pendingIdentifier || identifier || regEmail;
+    const activeId = pendingIdentifier || identifier.trim() || regEmail.trim();
     if (!activeId) return;
     dispatch(
       sendOtpThunk({
@@ -230,14 +250,30 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
     e.preventDefault();
     dispatch(clearAuthMessages());
 
-    if (!fullName.trim() || (!regEmail.trim() && !regPhone.trim()) || regPassword.length < 8) {
+    const targetEmail = regEmail.trim();
+    if (!fullName.trim() || !targetEmail || regPassword.length < 8) {
       return;
     }
 
+    // 1. Immediately transition to OTP_VERIFY so user is never thrown back to login
+    dispatch(
+      setPendingVerification({
+        identifier: targetEmail,
+        type: "EMAIL_VERIFICATION",
+      })
+    );
+    setAuthMode("OTP_VERIFY");
+    setResendCountdown(60);
+    setOtpDigits(["", "", "", "", "", ""]);
+    setTimeout(() => {
+      inputRefs.current[0]?.focus();
+    }, 300);
+
+    // 2. Dispatch backend registration
     dispatch(
       registerUserThunk({
         name: fullName.trim(),
-        email: regEmail.trim(),
+        email: targetEmail,
         phone: regPhone.trim() || undefined,
         password: regPassword,
         role: selectedRole,
@@ -251,7 +287,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
     const code = otpDigits.join("");
     if (code.length < 6) return;
 
-    const activeId = pendingIdentifier || identifier || regEmail;
+    const activeId = pendingIdentifier || identifier.trim() || regEmail.trim();
     dispatch(
       verifyOtpThunk({
         identifier: activeId,
@@ -260,6 +296,8 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
       })
     );
   };
+
+  const activeDisplayId = pendingIdentifier || identifier.trim() || regEmail.trim();
 
   return (
     <div className="relative w-full min-h-screen bg-[#06180E] text-white flex flex-col justify-between overflow-x-hidden selection:bg-[#C8F52F] selection:text-[#0B2D1B]">
@@ -312,7 +350,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
 
             <p className="text-white/80 text-sm sm:text-base leading-relaxed max-w-md font-light">
               {authMode === "OTP_VERIFY"
-                ? `Enter the 6-digit security code sent to ${pendingIdentifier || "your contact"}. This activates your instant digital pass.`
+                ? `Enter the 6-digit security OTP sent to ${activeDisplayId || "your contact"}. Verification unlocks your instant APMC pass.`
                 : authMode === "LOGIN"
                 ? "Sign in to book real-time mandi unloading slots, track gate entry QR tokens, and access live rates."
                 : "Create an account in under 2 minutes to eliminate waiting lines, verify digital tokens, and receive direct payments."}
@@ -346,7 +384,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
             <div className="bg-black/45 backdrop-blur-2xl border border-white/20 rounded-[32px] md:rounded-[40px] p-6 sm:p-8 md:p-10 shadow-2xl shadow-black/60 relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#C8F52F] to-transparent opacity-60" />
 
-              {/* Mode Switcher (Hidden during OTP Verification) */}
+              {/* Mode Switcher (Visible on Register/Login, hidden on OTP) */}
               {authMode !== "OTP_VERIFY" ? (
                 <div className="flex p-1 bg-white/10 backdrop-blur-md border border-white/15 rounded-full mb-6 shadow-inner">
                   <button
@@ -446,7 +484,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                 </div>
               )}
 
-              {/* Status Alert from Redux */}
+              {/* Status Alerts */}
               {error && (
                 <div className="mb-5 p-3.5 rounded-2xl text-xs font-medium border flex items-center gap-2 bg-red-500/20 border-red-500/30 text-red-200">
                   <ShieldCheck className="w-4 h-4 shrink-0" />
@@ -470,7 +508,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                     <p className="text-xs text-white/60">
                       Code dispatched to{" "}
                       <span className="font-semibold text-[#C8F52F]">
-                        {pendingIdentifier || identifier || regEmail}
+                        {activeDisplayId}
                       </span>
                     </p>
                   </div>
@@ -750,7 +788,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                       <div className="w-5 h-5 border-2 border-[#0B2D1B] border-t-transparent rounded-full animate-spin" />
                     ) : (
                       <>
-                        <span>Create {roles.find((r) => r.id === selectedRole)?.label} Account & Get OTP</span>
+                        <span>Create {roles.find((r) => r.id === selectedRole)?.label} Account & Verify OTP</span>
                         <ArrowUpRight size={18} strokeWidth={2.5} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                       </>
                     )}
