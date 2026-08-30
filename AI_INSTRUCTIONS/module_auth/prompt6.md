@@ -1,0 +1,1 @@
+fix the given shit error and tell me why you used usecontext when i said you to use redux

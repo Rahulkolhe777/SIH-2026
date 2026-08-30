@@ -12,6 +12,8 @@ This repository contains the project source code, configuration, documentation, 
 * Avoid unnecessary dependencies or architectural changes.
 * Preserve existing behavior unless a change is explicitly required.
 * Update documentation when behavior or interfaces change.
+* Use bun always.
+
 
 ## Production Rules
 

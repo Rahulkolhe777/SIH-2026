@@ -12,6 +12,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@prisma/client": "^5.22.0",
     "@repo/database": "workspace:*",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
