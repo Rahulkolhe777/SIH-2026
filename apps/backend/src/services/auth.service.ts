@@ -383,7 +383,7 @@ export async function sendOtp(identifier: string, type: OtpType) {
   });
 
   if (isEmail && user) {
-    if (type === OtpType.EMAIL_VERIFICATION) {
+    if (type === OtpType.EMAIL_VERIFICATION || type === OtpType.LOGIN_OTP) {
       await sendVerificationOtpEmail(user.email, user.name, otp);
     } else if (type === OtpType.PASSWORD_RESET) {
       await sendPasswordResetEmail(user.email, user.name, otp, otp);

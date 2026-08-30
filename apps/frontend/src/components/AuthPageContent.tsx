@@ -17,6 +17,7 @@ import {
   KeyRound,
   RotateCw,
   LogIn,
+  Send,
 } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../store";
 import {
@@ -207,13 +208,14 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
     }
   };
 
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!identifier.trim()) return;
+  const triggerSendOtp = async (targetId?: string) => {
+    const idToSend = (targetId || identifier || regEmail).trim();
+    if (!idToSend) return;
 
+    dispatch(clearAuthMessages());
     const result = await dispatch(
       sendOtpThunk({
-        identifier: identifier.trim(),
+        identifier: idToSend,
         type: "LOGIN_OTP",
       })
     );
@@ -221,6 +223,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
     if (sendOtpThunk.fulfilled.match(result)) {
       setAuthMode("OTP_VERIFY");
       setResendCountdown(60);
+      setOtpDigits(["", "", "", "", "", ""]);
       setTimeout(() => {
         inputRefs.current[0]?.focus();
       }, 300);
@@ -249,7 +252,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
       if (!password) return;
       await dispatch(loginUserThunk({ identifier: identifier.trim(), password }));
     } else {
-      handleSendOtp(e);
+      triggerSendOtp(identifier.trim());
     }
   };
 
@@ -485,6 +488,8 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                     <ShieldCheck className="w-4 h-4 shrink-0" />
                     <span>{error}</span>
                   </div>
+                  
+                  {/* Action 1: If account exists on Register, offer instant Sign In */}
                   {error.includes("already exists") && (
                     <button
                       type="button"
@@ -496,6 +501,18 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                     >
                       <LogIn size={12} />
                       <span>Sign In</span>
+                    </button>
+                  )}
+
+                  {/* Action 2: If login fails with invalid credentials, offer 1-click Sign In with OTP */}
+                  {(error.includes("Invalid") || error.includes("credentials")) && (
+                    <button
+                      type="button"
+                      onClick={() => triggerSendOtp(identifier)}
+                      className="px-2.5 py-1 bg-[#C8F52F] text-[#0B2D1B] hover:bg-[#b8e826] rounded-lg text-[11px] font-semibold whitespace-nowrap cursor-pointer flex items-center gap-1"
+                    >
+                      <Send size={11} />
+                      <span>Get OTP</span>
                     </button>
                   )}
                 </div>
@@ -604,23 +621,23 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                           : "border-transparent text-white/50 hover:text-white"
                       }`}
                     >
-                      Phone OTP
+                      Email / Phone OTP
                     </button>
                   </div>
 
                   <div>
                     <label className="text-xs font-medium text-white/70 mb-1.5 block">
-                      {loginMethod === "OTP" ? "Mobile Number" : "Email or Phone Number"}
+                      Email or Phone Number
                     </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-white/40">
-                        {loginMethod === "OTP" ? <Phone className="w-4 h-4" /> : <Mail className="w-4 h-4" />}
+                        {loginMethod === "OTP" ? <Mail className="w-4 h-4" /> : <User className="w-4 h-4" />}
                       </div>
                       <input
-                        type={loginMethod === "OTP" ? "tel" : "text"}
+                        type="text"
                         value={identifier}
                         onChange={(e) => setIdentifier(e.target.value)}
-                        placeholder={loginMethod === "OTP" ? "+91 98765 43210" : "user@agrovia.in / 9876543210"}
+                        placeholder="rupeshjagtap157@gmail.com / 9876543210"
                         className="w-full pl-11 pr-4 py-3.5 bg-white/[0.07] border border-white/20 focus:border-[#C8F52F] rounded-full text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-[#C8F52F] transition-all"
                         required
                       />
@@ -631,7 +648,13 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
                         <label className="text-xs font-medium text-white/70">Password</label>
-                        <a href="#forgot" className="text-xs text-[#C8F52F] hover:underline">Forgot password?</a>
+                        <button
+                          type="button"
+                          onClick={() => triggerSendOtp(identifier)}
+                          className="text-xs text-[#C8F52F] hover:underline cursor-pointer"
+                        >
+                          Sign in with OTP instead?
+                        </button>
                       </div>
                       <div className="relative">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-white/40">
@@ -665,7 +688,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                       <div className="w-5 h-5 border-2 border-[#0B2D1B] border-t-transparent rounded-full animate-spin" />
                     ) : loginMethod === "OTP" ? (
                       <>
-                        <span>Get 6-Digit OTP Code</span>
+                        <span>Send 6-Digit OTP Code</span>
                         <ArrowUpRight size={18} strokeWidth={2.5} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                       </>
                     ) : (
