@@ -1,12 +1,22 @@
 import { Router, Request, Response } from "express";
 import { authenticate, requireRole } from "../middlewares/auth.middleware.js";
+import {
+  getFarmerProfileHandler,
+  updateFarmerProfileHandler,
+} from "../controllers/farmer.controller.js";
 import { Role } from "@prisma/client";
 
 const router: Router = Router();
 
-// Protect all farmer routes with authenticate and requireRole(Role.FARMER)
+// Protect all farmer routes with authentication and requireRole(Role.FARMER)
 router.use(authenticate, requireRole(Role.FARMER));
 
+// Profile management routes
+router.get("/profile", getFarmerProfileHandler);
+router.put("/profile", updateFarmerProfileHandler);
+router.patch("/profile", updateFarmerProfileHandler);
+
+// Farmer dashboard route
 router.get("/dashboard", (req: Request, res: Response) => {
   res.status(200).json({
     success: true,
@@ -14,7 +24,7 @@ router.get("/dashboard", (req: Request, res: Response) => {
     data: {
       userId: req.user!.userId,
       role: req.user!.role,
-      modules: ["Crop Management", "Marketplace Prices", "Weather Forecasts", "Direct Bidding"],
+      modules: ["Crop Management", "Marketplace Prices", "Weather Forecasts", "Direct Bidding", "Profile & Land Records"],
     },
   });
 });

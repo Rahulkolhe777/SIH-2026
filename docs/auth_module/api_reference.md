@@ -19,6 +19,8 @@ Base URL: `http://localhost:4000/api/v1`
 | `POST` | `/auth/forgot-password` | Initiate password recovery email link + OTP | No | Yes (5/10m) |
 | `POST` | `/auth/reset-password` | Set new password with reset token or OTP | No | No |
 | `GET` | `/auth/me` | Fetch authenticated user profile | Bearer Token | No |
+| `GET` | `/farmer/profile` | Fetch complete farmer profile, address, & crop info | Bearer Token (FARMER) | No |
+| `PUT` | `/farmer/profile` | Update farmer name, address with pincode, and crops | Bearer Token (FARMER) | No |
 | `GET` | `/farmer/dashboard` | Farmer protected dashboard (RBAC) | Bearer Token (FARMER) | No |
 | `GET` | `/mandi/dashboard` | Mandi Operator protected dashboard (RBAC) | Bearer Token (MANDI_OPERATOR) | No |
 
@@ -313,6 +315,90 @@ Authorization: Bearer <access_token>
       "updatedAt": "2026-08-28T16:35:00.000Z"
     }
   }
+}
+```
+
+---
+
+### 2.12 Get Farmer Profile: `GET /farmer/profile`
+
+Fetches the complete profile, detailed address, and crop records for the authenticated farmer.
+
+**Headers:**
+- `Authorization: Bearer <ACCESS_TOKEN>` (Role: `FARMER`)
+
+**Response (`200 OK`):**
+```json
+{
+  "success": true,
+  "message": "Farmer profile retrieved successfully.",
+  "data": {
+    "id": "cm7xyz1230000abc",
+    "name": "Ramesh Kumar",
+    "email": "ramesh@example.com",
+    "phone": "+919876543210",
+    "role": "FARMER",
+    "isVerified": true,
+    "createdAt": "2026-08-28T16:30:00.000Z",
+    "updatedAt": "2026-08-28T16:35:00.000Z",
+    "farmerProfile": {
+      "id": "fp_cm7xyz123",
+      "userId": "cm7xyz1230000abc",
+      "addressLine1": "Plot 12, Kisan Nagar",
+      "addressLine2": "Near APMC Market",
+      "village": "Lasalgaon",
+      "taluka": "Niphad",
+      "district": "Nashik",
+      "state": "Maharashtra",
+      "pincode": "422306",
+      "landSizeAcres": 5.5,
+      "mainCrops": ["Onion", "Tomato", "Wheat"],
+      "secondaryCrops": ["Gram", "Soybean"],
+      "irrigationType": "Drip Irrigation",
+      "farmLocation": "Farm Gate 1",
+      "createdAt": "2026-08-28T16:30:00.000Z",
+      "updatedAt": "2026-08-28T16:35:00.000Z"
+    }
+  }
+}
+```
+
+---
+
+### 2.13 Update Farmer Profile: `PUT /farmer/profile` (or `PATCH`)
+
+Updates the farmer's personal information (name, phone), detailed address with 6-digit pincode, and agricultural details (crops, land size, irrigation).
+
+**Headers:**
+- `Authorization: Bearer <ACCESS_TOKEN>` (Role: `FARMER`)
+
+**Request Body:**
+```json
+{
+  "name": "Ramesh Jagtap",
+  "phone": "+919876543210",
+  "addressLine1": "Plot 12, Kisan Nagar",
+  "addressLine2": "Near APMC Market",
+  "village": "Lasalgaon",
+  "taluka": "Niphad",
+  "district": "Nashik",
+  "state": "Maharashtra",
+  "pincode": "422306",
+  "landSizeAcres": 6.5,
+  "mainCrops": ["Onion", "Tomato", "Soybean"],
+  "secondaryCrops": ["Gram"],
+  "irrigationType": "Drip Irrigation",
+  "farmLocation": "Farm Gate 1"
+}
+```
+*Note: All fields are optional. `pincode` must be exactly 6 digits if provided.*
+
+**Response (`200 OK`):**
+```json
+{
+  "success": true,
+  "message": "Farmer profile updated successfully.",
+  "data": { ... }
 }
 ```
 

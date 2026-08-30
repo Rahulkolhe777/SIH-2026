@@ -554,6 +554,7 @@ export async function getCurrentUser(userId: string) {
       isVerified: true,
       createdAt: true,
       updatedAt: true,
+      farmerProfile: true,
     },
   });
 
