@@ -3,6 +3,7 @@ import type { PayloadAction } from "@reduxjs/toolkit";
 import type {
   AuthState,
   LoginPayload,
+  OtpVerificationType,
   RegisterPayload,
   SendOtpPayload,
   User,
@@ -36,9 +37,11 @@ const initialToken: string | null = (() => {
 const initialState: AuthState = {
   user: initialUser,
   accessToken: initialToken,
-  isAuthenticated: !!initialToken,
+  isAuthenticated: !!initialToken && !!initialUser,
   isLoading: false,
   otpSent: false,
+  pendingIdentifier: null,
+  pendingOtpType: "EMAIL_VERIFICATION",
   error: null,
   successMessage: null,
 };
@@ -49,9 +52,12 @@ export const registerUserThunk = createAsyncThunk(
   async (payload: RegisterPayload, { rejectWithValue }) => {
     const response = await apiRegister(payload);
     if (!response.success || !response.data) {
-      return rejectWithValue(response.error?.message || "Registration failed. Please try again.");
+      return rejectWithValue(response.error?.message || response.message || "Registration failed. Please try again.");
     }
-    return response.data;
+    return {
+      data: response.data,
+      email: payload.email,
+    };
   }
 );
 
@@ -60,7 +66,15 @@ export const loginUserThunk = createAsyncThunk(
   async (payload: LoginPayload, { rejectWithValue }) => {
     const response = await apiLogin(payload);
     if (!response.success || !response.data) {
-      return rejectWithValue(response.error?.message || "Invalid credentials. Please check your details.");
+      // Check if unverified account
+      if (response.code === "ACCOUNT_NOT_VERIFIED" || (response.error?.code === "ACCOUNT_NOT_VERIFIED")) {
+        return rejectWithValue({
+          code: "ACCOUNT_NOT_VERIFIED",
+          identifier: payload.identifier,
+          message: "Please verify your account with the 6-digit OTP code.",
+        });
+      }
+      return rejectWithValue(response.error?.message || response.message || "Invalid credentials. Please check your details.");
     }
     return response.data;
   }
@@ -71,9 +85,14 @@ export const sendOtpThunk = createAsyncThunk(
   async (payload: SendOtpPayload, { rejectWithValue }) => {
     const response = await apiSendOtp(payload);
     if (!response.success) {
-      return rejectWithValue(response.error?.message || "Failed to send OTP code.");
+      return rejectWithValue(response.error?.message || response.message || "Failed to send OTP code.");
     }
-    return response.data?.message || "OTP sent successfully.";
+    return {
+      message: response.data?.message || "OTP sent successfully.",
+      identifier: payload.identifier,
+      type: payload.type || "EMAIL_VERIFICATION",
+      otp: response.data?.otp, // Present in development mode
+    };
   }
 );
 
@@ -82,7 +101,7 @@ export const verifyOtpThunk = createAsyncThunk(
   async (payload: VerifyOtpPayload, { rejectWithValue }) => {
     const response = await apiVerifyOtp(payload);
     if (!response.success || !response.data) {
-      return rejectWithValue(response.error?.message || "Invalid or expired OTP code.");
+      return rejectWithValue(response.error?.message || response.message || "Invalid or expired OTP code.");
     }
     return response.data;
   }
@@ -107,6 +126,14 @@ export const authSlice = createSlice({
       state.error = null;
       state.successMessage = null;
     },
+    setPendingVerification: (
+      state,
+      action: PayloadAction<{ identifier: string; type?: OtpVerificationType }>
+    ) => {
+      state.pendingIdentifier = action.payload.identifier;
+      state.pendingOtpType = action.payload.type || "EMAIL_VERIFICATION";
+      state.otpSent = true;
+    },
     logout: (state) => {
       state.user = null;
       state.accessToken = null;
@@ -114,20 +141,10 @@ export const authSlice = createSlice({
       state.error = null;
       state.successMessage = null;
       state.otpSent = false;
+      state.pendingIdentifier = null;
       try {
         localStorage.removeItem("mandi_current_user");
         localStorage.removeItem("mandi_access_token");
-      } catch (e) {
-        console.error(e);
-      }
-    },
-    setMockUser: (state, action: PayloadAction<User>) => {
-      state.user = action.payload;
-      state.isAuthenticated = true;
-      state.accessToken = "mock-dev-token";
-      try {
-        localStorage.setItem("mandi_current_user", JSON.stringify(action.payload));
-        localStorage.setItem("mandi_access_token", "mock-dev-token");
       } catch (e) {
         console.error(e);
       }
@@ -142,11 +159,14 @@ export const authSlice = createSlice({
       })
       .addCase(registerUserThunk.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.successMessage = `Account created for ${action.payload.user.name}! Please sign in.`;
+        state.pendingIdentifier = action.payload.email;
+        state.pendingOtpType = "EMAIL_VERIFICATION";
+        state.otpSent = true;
+        state.successMessage = "Account created! Please enter the 6-digit OTP code sent to your email.";
       })
       .addCase(registerUserThunk.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload as string;
+        state.error = (action.payload as string) || "Registration failed.";
       });
 
     // Login
@@ -170,7 +190,15 @@ export const authSlice = createSlice({
       })
       .addCase(loginUserThunk.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload as string;
+        const payload = action.payload as any;
+        if (payload?.code === "ACCOUNT_NOT_VERIFIED") {
+          state.pendingIdentifier = payload.identifier;
+          state.pendingOtpType = "EMAIL_VERIFICATION";
+          state.otpSent = true;
+          state.error = payload.message;
+        } else {
+          state.error = (typeof payload === "string" ? payload : payload?.message) || "Invalid credentials.";
+        }
       });
 
     // Send OTP
@@ -182,7 +210,9 @@ export const authSlice = createSlice({
       .addCase(sendOtpThunk.fulfilled, (state, action) => {
         state.isLoading = false;
         state.otpSent = true;
-        state.successMessage = action.payload;
+        state.pendingIdentifier = action.payload.identifier;
+        state.pendingOtpType = action.payload.type;
+        state.successMessage = action.payload.message;
       })
       .addCase(sendOtpThunk.rejected, (state, action) => {
         state.isLoading = false;
@@ -200,7 +230,9 @@ export const authSlice = createSlice({
         state.user = action.payload.user;
         state.accessToken = action.payload.accessToken;
         state.isAuthenticated = true;
-        state.successMessage = `Signed in successfully as ${action.payload.user.name}!`;
+        state.pendingIdentifier = null;
+        state.otpSent = false;
+        state.successMessage = `Account verified! Welcome, ${action.payload.user.name}!`;
         try {
           localStorage.setItem("mandi_current_user", JSON.stringify(action.payload.user));
           localStorage.setItem("mandi_access_token", action.payload.accessToken);
@@ -220,7 +252,6 @@ export const authSlice = createSlice({
         state.isAuthenticated = true;
       })
       .addCase(fetchCurrentUserThunk.rejected, (state) => {
-        // If session invalid, clear token
         state.user = null;
         state.accessToken = null;
         state.isAuthenticated = false;
@@ -228,5 +259,5 @@ export const authSlice = createSlice({
   },
 });
 
-export const { clearAuthMessages, logout, setMockUser } = authSlice.actions;
+export const { clearAuthMessages, setPendingVerification, logout } = authSlice.actions;
 export default authSlice.reducer;

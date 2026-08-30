@@ -64,17 +64,24 @@ export async function apiLogin(payload: LoginPayload): Promise<ApiResponse<AuthR
   });
 }
 
-export async function apiSendOtp(payload: SendOtpPayload): Promise<ApiResponse<{ message: string }>> {
-  return request<{ message: string }>("/api/v1/auth/otp/send", {
+export async function apiSendOtp(payload: SendOtpPayload): Promise<ApiResponse<{ message: string; otp?: string }>> {
+  return request<{ message: string; otp?: string }>("/api/v1/auth/send-otp", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      identifier: payload.identifier,
+      type: payload.type || "EMAIL_VERIFICATION",
+    }),
   });
 }
 
 export async function apiVerifyOtp(payload: VerifyOtpPayload): Promise<ApiResponse<AuthResponseData>> {
-  return request<AuthResponseData>("/api/v1/auth/otp/verify", {
+  return request<AuthResponseData>("/api/v1/auth/verify-otp", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      identifier: payload.identifier,
+      code: payload.code,
+      type: payload.type || "EMAIL_VERIFICATION",
+    }),
   });
 }
 

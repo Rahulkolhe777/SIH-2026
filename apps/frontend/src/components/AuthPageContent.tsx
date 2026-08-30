@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   ArrowUpRight,
+  ArrowLeft,
   Check,
   Eye,
   EyeOff,
@@ -13,6 +14,8 @@ import {
   MapPin,
   Sprout,
   Landmark,
+  KeyRound,
+  RotateCw,
 } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../store";
 import {
@@ -21,14 +24,15 @@ import {
   registerUserThunk,
   sendOtpThunk,
   verifyOtpThunk,
+  setPendingVerification,
 } from "../store/slices/authSlice";
-import type { Role } from "../interfaces";
+import type { Role, OtpVerificationType } from "../interfaces";
 
-type AuthMode = "LOGIN" | "REGISTER";
+type AuthMode = "LOGIN" | "REGISTER" | "OTP_VERIFY";
 type LoginMethod = "PASSWORD" | "OTP";
 
 interface AuthProps {
-  initialMode?: AuthMode;
+  initialMode?: "LOGIN" | "REGISTER";
   onSuccess?: () => void;
 }
 
@@ -49,9 +53,14 @@ const roles = [
 
 export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps) {
   const dispatch = useAppDispatch();
-  const { isLoading, otpSent, error, successMessage, isAuthenticated } = useAppSelector(
-    (state) => state.auth
-  );
+  const {
+    isLoading,
+    error,
+    successMessage,
+    isAuthenticated,
+    pendingIdentifier,
+    pendingOtpType,
+  } = useAppSelector((state) => state.auth);
 
   const [authMode, setAuthMode] = useState<AuthMode>(initialMode);
   const [selectedRole, setSelectedRole] = useState<Role>("FARMER");
@@ -60,16 +69,20 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
   // Login Form
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
-  const [otpCode, setOtpCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  // Register Form (Simple and uniform for both Farmer & Mandi Operator)
+  // Register Form
   const [fullName, setFullName] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [regPhone, setRegPhone] = useState("");
   const [location, setLocation] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
+
+  // 6-digit OTP Box Inputs
+  const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [resendCountdown, setResendCountdown] = useState(60);
 
   const [scrollY, setScrollY] = useState(0);
 
@@ -84,22 +97,119 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
     if (isAuthenticated) {
       const timer = setTimeout(() => {
         if (onSuccess) onSuccess();
-        else window.location.href = "/dashboard";
+        else window.location.href = "/farmer/dashboard";
       }, 700);
       return () => clearTimeout(timer);
     }
   }, [isAuthenticated, onSuccess]);
 
+  // When pendingIdentifier is set in Redux, automatically switch to OTP_VERIFY view
+  useEffect(() => {
+    if (pendingIdentifier && authMode !== "OTP_VERIFY") {
+      setAuthMode("OTP_VERIFY");
+      setResendCountdown(60);
+      // Focus first OTP input
+      setTimeout(() => {
+        inputRefs.current[0]?.focus();
+      }, 300);
+    }
+  }, [pendingIdentifier, authMode]);
+
+  // Countdown timer for OTP resend
+  useEffect(() => {
+    if (authMode !== "OTP_VERIFY" || resendCountdown <= 0) return;
+    const interval = setInterval(() => {
+      setResendCountdown((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [authMode, resendCountdown]);
+
   const switchMode = (mode: AuthMode) => {
     setAuthMode(mode);
     dispatch(clearAuthMessages());
-    window.history.pushState({}, "", mode === "LOGIN" ? "/login" : "/register");
+    if (mode === "LOGIN") window.history.pushState({}, "", "/login");
+    else if (mode === "REGISTER") window.history.pushState({}, "", "/register");
+  };
+
+  // Handle individual OTP digit typing and auto-focus
+  const handleOtpChange = (index: number, val: string) => {
+    const cleanVal = val.replace(/\D/g, "").slice(-1);
+    const newDigits = [...otpDigits];
+    newDigits[index] = cleanVal;
+    setOtpDigits(newDigits);
+
+    // Auto-advance
+    if (cleanVal && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+
+    // Auto-submit if all 6 digits filled
+    const fullCode = newDigits.join("");
+    if (fullCode.length === 6 && !newDigits.includes("")) {
+      const activeId = pendingIdentifier || identifier || regEmail;
+      dispatch(
+        verifyOtpThunk({
+          identifier: activeId,
+          code: fullCode,
+          type: pendingOtpType || "EMAIL_VERIFICATION",
+        })
+      );
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && !otpDigits[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!pasted) return;
+
+    const newDigits = [...otpDigits];
+    for (let i = 0; i < pasted.length; i++) {
+      newDigits[i] = pasted[i] || "";
+    }
+    setOtpDigits(newDigits);
+
+    if (pasted.length === 6) {
+      inputRefs.current[5]?.focus();
+      const activeId = pendingIdentifier || identifier || regEmail;
+      dispatch(
+        verifyOtpThunk({
+          identifier: activeId,
+          code: pasted,
+          type: pendingOtpType || "EMAIL_VERIFICATION",
+        })
+      );
+    } else {
+      inputRefs.current[pasted.length]?.focus();
+    }
   };
 
   const handleSendOtp = (e: React.FormEvent) => {
     e.preventDefault();
     if (!identifier.trim()) return;
-    dispatch(sendOtpThunk({ identifier, type: "LOGIN" }));
+    dispatch(
+      sendOtpThunk({
+        identifier: identifier.trim(),
+        type: "LOGIN_OTP",
+      })
+    );
+  };
+
+  const handleResendOtp = () => {
+    const activeId = pendingIdentifier || identifier || regEmail;
+    if (!activeId) return;
+    dispatch(
+      sendOtpThunk({
+        identifier: activeId,
+        type: pendingOtpType || "EMAIL_VERIFICATION",
+      })
+    );
+    setResendCountdown(60);
   };
 
   const handleLoginSubmit = (e: React.FormEvent) => {
@@ -110,10 +220,9 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
 
     if (loginMethod === "PASSWORD") {
       if (!password) return;
-      dispatch(loginUserThunk({ identifier, password }));
+      dispatch(loginUserThunk({ identifier: identifier.trim(), password }));
     } else {
-      if (!otpCode) return;
-      dispatch(verifyOtpThunk({ identifier, code: otpCode, type: "LOGIN" }));
+      handleSendOtp(e);
     }
   };
 
@@ -127,23 +236,34 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
 
     dispatch(
       registerUserThunk({
-        name: fullName,
-        email: regEmail,
-        phone: regPhone,
+        name: fullName.trim(),
+        email: regEmail.trim(),
+        phone: regPhone.trim() || undefined,
         password: regPassword,
         role: selectedRole,
-        location,
+        location: location.trim() || undefined,
       })
-    ).then((action: any) => {
-      if (!action.error) {
-        setTimeout(() => switchMode("LOGIN"), 1200);
-      }
-    });
+    );
+  };
+
+  const handleVerifyOtpSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const code = otpDigits.join("");
+    if (code.length < 6) return;
+
+    const activeId = pendingIdentifier || identifier || regEmail;
+    dispatch(
+      verifyOtpThunk({
+        identifier: activeId,
+        code,
+        type: pendingOtpType || "EMAIL_VERIFICATION",
+      })
+    );
   };
 
   return (
     <div className="relative w-full min-h-screen bg-[#06180E] text-white flex flex-col justify-between overflow-x-hidden selection:bg-[#C8F52F] selection:text-[#0B2D1B]">
-      {/* Background Image with Landing Hero Parallax */}
+      {/* Background Image with Parallax */}
       <div
         className="absolute inset-0 w-full h-full pointer-events-none will-change-transform z-0"
         style={{
@@ -163,44 +283,48 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
       <div className="absolute bottom-0 left-0 right-0 h-[600px] bg-gradient-to-t from-[#05160C] via-[#05160C]/80 to-transparent pointer-events-none z-10" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_40%,_rgba(5,22,12,0.6)_100%)] pointer-events-none z-10" />
 
-      {/* CENTER: Main Container with Landing Typography & Stacked Glass Card */}
+      {/* CENTER: Main Container */}
       <main className="relative z-20 w-full px-4 sm:px-6 md:px-12 lg:px-16 py-12 md:py-16 my-auto flex flex-col items-center">
         <div className="w-full max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
           
-          {/* Left Column: Hero-Styled Statement */}
+          {/* Left Column: Hero Statement */}
           <div className="lg:col-span-5 text-left space-y-6">
-            {/* Pill Badge */}
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/35 backdrop-blur-md border border-white/20 text-xs font-medium text-white shadow-lg">
               <span className="w-2 h-2 rounded-full bg-[#C8F52F] animate-pulse" />
               <span>Smart Mandi Portal</span>
             </div>
 
-            {/* Editorial Heading matching Hero */}
             <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-[48px] font-normal leading-[1.08] tracking-tight text-white select-none">
               <span className="block font-medium">
-                {authMode === "LOGIN" ? "Welcome to" : "Join the"}
+                {authMode === "OTP_VERIFY"
+                  ? "Verify Your"
+                  : authMode === "LOGIN"
+                  ? "Welcome to"
+                  : "Join the"}
               </span>
               <span className="block mt-1">
                 Agrovia{" "}
                 <span className="font-editorial italic font-normal text-white drop-shadow-sm tracking-normal">
-                  {authMode === "LOGIN" ? "Portal" : "Network"}
+                  {authMode === "OTP_VERIFY" ? "Account" : authMode === "LOGIN" ? "Portal" : "Network"}
                 </span>
               </span>
             </h1>
 
             <p className="text-white/80 text-sm sm:text-base leading-relaxed max-w-md font-light">
-              {authMode === "LOGIN"
+              {authMode === "OTP_VERIFY"
+                ? `Enter the 6-digit security code sent to ${pendingIdentifier || "your contact"}. This activates your instant digital pass.`
+                : authMode === "LOGIN"
                 ? "Sign in to book real-time mandi unloading slots, track gate entry QR tokens, and access live rates."
-                : "Create an account in under 2 minutes to eliminate waiting lines, verify digital tokens, and receive payments."}
+                : "Create an account in under 2 minutes to eliminate waiting lines, verify digital tokens, and receive direct payments."}
             </p>
 
-            {/* Features Highlight */}
+            {/* Feature Highlights */}
             <div className="space-y-3 pt-2">
               <div className="flex items-center gap-3 text-sm text-white/90">
                 <div className="w-5 h-5 rounded-full bg-[#C8F52F]/20 flex items-center justify-center text-[#C8F52F] shrink-0">
                   <Check className="w-3.5 h-3.5 stroke-[3]" />
                 </div>
-                <span>Zero gate waiting with automated digital tokens</span>
+                <span>Zero gate waiting with automated digital QR tokens</span>
               </div>
               <div className="flex items-center gap-3 text-sm text-white/90">
                 <div className="w-5 h-5 rounded-full bg-[#C8F52F]/20 flex items-center justify-center text-[#C8F52F] shrink-0">
@@ -212,96 +336,115 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                 <div className="w-5 h-5 rounded-full bg-[#C8F52F]/20 flex items-center justify-center text-[#C8F52F] shrink-0">
                   <Check className="w-3.5 h-3.5 stroke-[3]" />
                 </div>
-                <span>Direct real-time slot scheduling across all active yards</span>
+                <span>Direct real-time slot scheduling across all active APMC yards</span>
               </div>
             </div>
           </div>
 
-          {/* Right Column: Frosted Glass Form Card */}
+          {/* Right Column: Form Card */}
           <div className="lg:col-span-7 w-full max-w-lg mx-auto">
             <div className="bg-black/45 backdrop-blur-2xl border border-white/20 rounded-[32px] md:rounded-[40px] p-6 sm:p-8 md:p-10 shadow-2xl shadow-black/60 relative overflow-hidden">
-              {/* Subtle top accent */}
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#C8F52F] to-transparent opacity-60" />
 
-              {/* Mode Switcher Pill (Sign In vs Register) */}
-              <div className="flex p-1 bg-white/10 backdrop-blur-md border border-white/15 rounded-full mb-6 shadow-inner">
-                <button
-                  type="button"
-                  onClick={() => switchMode("LOGIN")}
-                  className={`flex-1 py-2 text-xs sm:text-sm rounded-full transition-all duration-300 font-medium cursor-pointer ${
-                    authMode === "LOGIN"
-                      ? "bg-white text-[#0B2D1B] font-semibold shadow-md scale-100"
-                      : "text-white/80 hover:text-white"
-                  }`}
-                >
-                  Sign In
-                </button>
-                <button
-                  type="button"
-                  onClick={() => switchMode("REGISTER")}
-                  className={`flex-1 py-2 text-xs sm:text-sm rounded-full transition-all duration-300 font-medium cursor-pointer ${
-                    authMode === "REGISTER"
-                      ? "bg-[#C8F52F] text-[#0B2D1B] font-semibold shadow-md scale-100"
-                      : "text-white/80 hover:text-white"
-                  }`}
-                >
-                  Create Account
-                </button>
-              </div>
+              {/* Mode Switcher (Hidden during OTP Verification) */}
+              {authMode !== "OTP_VERIFY" ? (
+                <div className="flex p-1 bg-white/10 backdrop-blur-md border border-white/15 rounded-full mb-6 shadow-inner">
+                  <button
+                    type="button"
+                    onClick={() => switchMode("LOGIN")}
+                    className={`flex-1 py-2 text-xs sm:text-sm rounded-full transition-all duration-300 font-medium cursor-pointer ${
+                      authMode === "LOGIN"
+                        ? "bg-white text-[#0B2D1B] font-semibold shadow-md scale-100"
+                        : "text-white/80 hover:text-white"
+                    }`}
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => switchMode("REGISTER")}
+                    className={`flex-1 py-2 text-xs sm:text-sm rounded-full transition-all duration-300 font-medium cursor-pointer ${
+                      authMode === "REGISTER"
+                        ? "bg-[#C8F52F] text-[#0B2D1B] font-semibold shadow-md scale-100"
+                        : "text-white/80 hover:text-white"
+                    }`}
+                  >
+                    Create Account
+                  </button>
+                </div>
+              ) : (
+                /* Back to Registration / Login Link */
+                <div className="flex items-center justify-between mb-6 pb-2 border-b border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => switchMode("REGISTER")}
+                    className="inline-flex items-center gap-1.5 text-xs text-white/70 hover:text-white transition-colors cursor-pointer"
+                  >
+                    <ArrowLeft size={14} />
+                    <span>Back to Details</span>
+                  </button>
+                  <span className="text-xs text-[#C8F52F] font-semibold flex items-center gap-1">
+                    <KeyRound size={13} />
+                    Security Verification
+                  </span>
+                </div>
+              )}
 
-              {/* Role Selection Matrix (Farmer & Mandi Operator Only, No Emojis) */}
-              <div className="mb-6 space-y-2 text-left">
-                <label className="text-xs font-medium text-white/70 uppercase tracking-wider block">
-                  Select Role
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  {roles.map((role) => {
-                    const isSelected = selectedRole === role.id;
-                    const IconComponent = role.icon;
-                    return (
-                      <button
-                        type="button"
-                        key={role.id}
-                        onClick={() => setSelectedRole(role.id)}
-                        className={`p-3.5 rounded-2xl text-left border transition-all duration-200 cursor-pointer flex items-start gap-3 relative ${
-                          isSelected
-                            ? "bg-[#C8F52F]/15 border-[#C8F52F] shadow-sm scale-[1.01]"
-                            : "bg-white/[0.04] border-white/15 hover:bg-white/[0.08]"
-                        }`}
-                      >
-                        <div
-                          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+              {/* Role Selection Matrix (Only on Register / Login) */}
+              {authMode !== "OTP_VERIFY" && (
+                <div className="mb-6 space-y-2 text-left">
+                  <label className="text-xs font-medium text-white/70 uppercase tracking-wider block">
+                    Select Role
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {roles.map((role) => {
+                      const isSelected = selectedRole === role.id;
+                      const IconComponent = role.icon;
+                      return (
+                        <button
+                          type="button"
+                          key={role.id}
+                          onClick={() => setSelectedRole(role.id)}
+                          className={`p-3.5 rounded-2xl text-left border transition-all duration-200 cursor-pointer flex items-start gap-3 relative ${
                             isSelected
-                              ? "bg-[#C8F52F] text-[#0B2D1B]"
-                              : "bg-white/10 text-white/80"
+                              ? "bg-[#C8F52F]/15 border-[#C8F52F] shadow-sm scale-[1.01]"
+                              : "bg-white/[0.04] border-white/15 hover:bg-white/[0.08]"
                           }`}
                         >
-                          <IconComponent className="w-5 h-5" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between">
-                            <span
-                              className={`text-xs font-semibold block truncate ${
-                                isSelected ? "text-[#C8F52F]" : "text-white"
-                              }`}
-                            >
-                              {role.label}
-                            </span>
-                            {isSelected && (
-                              <div className="w-3.5 h-3.5 rounded-full bg-[#C8F52F] flex items-center justify-center shrink-0">
-                                <Check className="w-2.5 h-2.5 text-[#0B2D1B] stroke-[3]" />
-                              </div>
-                            )}
+                          <div
+                            className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                              isSelected
+                                ? "bg-[#C8F52F] text-[#0B2D1B]"
+                                : "bg-white/10 text-white/80"
+                            }`}
+                          >
+                            <IconComponent className="w-5 h-5" />
                           </div>
-                          <span className="text-[10px] text-white/50 block leading-tight mt-0.5">
-                            {role.desc}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between">
+                              <span
+                                className={`text-xs font-semibold block truncate ${
+                                  isSelected ? "text-[#C8F52F]" : "text-white"
+                                }`}
+                              >
+                                {role.label}
+                              </span>
+                              {isSelected && (
+                                <div className="w-3.5 h-3.5 rounded-full bg-[#C8F52F] flex items-center justify-center shrink-0">
+                                  <Check className="w-2.5 h-2.5 text-[#0B2D1B] stroke-[3]" />
+                                </div>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-white/50 block leading-tight mt-0.5">
+                              {role.desc}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Status Alert from Redux */}
               {error && (
@@ -317,10 +460,82 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                 </div>
               )}
 
-              {/* LOGIN FORM */}
+              {/* ======================================================== */}
+              {/* 1. DEDICATED OTP VERIFICATION SCREEN */}
+              {/* ======================================================== */}
+              {authMode === "OTP_VERIFY" && (
+                <form onSubmit={handleVerifyOtpSubmit} className="space-y-6 text-center animate-fadeIn">
+                  <div className="space-y-1">
+                    <h3 className="text-lg font-bold text-white">Enter 6-Digit OTP Code</h3>
+                    <p className="text-xs text-white/60">
+                      Code dispatched to{" "}
+                      <span className="font-semibold text-[#C8F52F]">
+                        {pendingIdentifier || identifier || regEmail}
+                      </span>
+                    </p>
+                  </div>
+
+                  {/* 6-Box Segmented Inputs with Auto-Focus */}
+                  <div className="flex items-center justify-center gap-2 sm:gap-3 py-2">
+                    {otpDigits.map((digit, idx) => (
+                      <input
+                        key={idx}
+                        ref={(el) => {
+                          inputRefs.current[idx] = el;
+                        }}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(e) => handleOtpChange(idx, e.target.value)}
+                        onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                        onPaste={handleOtpPaste}
+                        className="w-11 h-13 sm:w-12 sm:h-14 bg-white/[0.08] border border-white/25 focus:border-[#C8F52F] focus:bg-[#C8F52F]/10 rounded-2xl text-center font-mono text-xl font-bold text-white focus:outline-none focus:ring-2 focus:ring-[#C8F52F]/40 transition-all"
+                        required
+                      />
+                    ))}
+                  </div>
+
+                  {/* Resend Section */}
+                  <div className="flex items-center justify-between text-xs px-1">
+                    <span className="text-white/60">Didn't receive the code?</span>
+                    {resendCountdown > 0 ? (
+                      <span className="text-white/40 font-mono">Resend in {resendCountdown}s</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleResendOtp}
+                        className="text-[#C8F52F] hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+                      >
+                        <RotateCw size={12} />
+                        <span>Resend OTP</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Submit Button */}
+                  <button
+                    type="submit"
+                    disabled={isLoading || otpDigits.join("").length < 6}
+                    className="w-full group inline-flex items-center justify-center gap-2.5 bg-[#C8F52F] hover:bg-[#b8e826] active:scale-98 text-[#0B2D1B] font-semibold px-6 py-4 rounded-full text-sm sm:text-[15px] transition-all duration-300 shadow-lg shadow-black/25 hover:shadow-[#C8F52F]/25 cursor-pointer disabled:opacity-50"
+                  >
+                    {isLoading ? (
+                      <div className="w-5 h-5 border-2 border-[#0B2D1B] border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <span>Verify & Enter Dashboard</span>
+                        <ArrowUpRight size={18} strokeWidth={2.5} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                      </>
+                    )}
+                  </button>
+                </form>
+              )}
+
+              {/* ======================================================== */}
+              {/* 2. LOGIN FORM */}
+              {/* ======================================================== */}
               {authMode === "LOGIN" && (
-                <form onSubmit={loginMethod === "OTP" && !otpSent ? handleSendOtp : handleLoginSubmit} className="space-y-4 text-left">
-                  {/* Password / OTP Toggle */}
+                <form onSubmit={handleLoginSubmit} className="space-y-4 text-left">
                   <div className="flex gap-2 pb-1">
                     <button
                       type="button"
@@ -346,7 +561,6 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                     </button>
                   </div>
 
-                  {/* Identifier Field */}
                   <div>
                     <label className="text-xs font-medium text-white/70 mb-1.5 block">
                       {loginMethod === "OTP" ? "Mobile Number" : "Email or Phone Number"}
@@ -366,16 +580,11 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                     </div>
                   </div>
 
-                  {/* Password Field */}
                   {loginMethod === "PASSWORD" && (
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
-                        <label className="text-xs font-medium text-white/70">
-                          Password
-                        </label>
-                        <a href="#forgot" className="text-xs text-[#C8F52F] hover:underline">
-                          Forgot password?
-                        </a>
+                        <label className="text-xs font-medium text-white/70">Password</label>
+                        <a href="#forgot" className="text-xs text-[#C8F52F] hover:underline">Forgot password?</a>
                       </div>
                       <div className="relative">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-white/40">
@@ -400,34 +609,6 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                     </div>
                   )}
 
-                  {/* OTP Field */}
-                  {loginMethod === "OTP" && otpSent && (
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <label className="text-xs font-medium text-white/70">
-                          Enter 6-Digit OTP Code
-                        </label>
-                        <button
-                          type="button"
-                          onClick={handleSendOtp}
-                          className="text-xs text-[#C8F52F] hover:underline cursor-pointer"
-                        >
-                          Resend Code
-                        </button>
-                      </div>
-                      <input
-                        type="text"
-                        maxLength={6}
-                        value={otpCode}
-                        onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
-                        placeholder="123456"
-                        className="w-full px-4 py-3.5 bg-white/[0.07] border border-white/20 focus:border-[#C8F52F] rounded-full text-center tracking-[0.4em] font-mono text-base text-white placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-[#C8F52F] transition-all"
-                        required
-                      />
-                    </div>
-                  )}
-
-                  {/* Action Button */}
                   <button
                     type="submit"
                     disabled={isLoading}
@@ -435,9 +616,9 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                   >
                     {isLoading ? (
                       <div className="w-5 h-5 border-2 border-[#0B2D1B] border-t-transparent rounded-full animate-spin" />
-                    ) : loginMethod === "OTP" && !otpSent ? (
+                    ) : loginMethod === "OTP" ? (
                       <>
-                        <span>Get OTP Code</span>
+                        <span>Get 6-Digit OTP Code</span>
                         <ArrowUpRight size={18} strokeWidth={2.5} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                       </>
                     ) : (
@@ -450,14 +631,13 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                 </form>
               )}
 
-              {/* REGISTER FORM (Clean, uniform fields for both Farmer & Mandi Operator) */}
+              {/* ======================================================== */}
+              {/* 3. REGISTER FORM */}
+              {/* ======================================================== */}
               {authMode === "REGISTER" && (
                 <form onSubmit={handleRegisterSubmit} className="space-y-3.5 text-left">
-                  {/* Full Name */}
                   <div>
-                    <label className="text-xs font-medium text-white/70 mb-1 block">
-                      Full Name
-                    </label>
+                    <label className="text-xs font-medium text-white/70 mb-1 block">Full Name</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-white/40">
                         <User className="w-4 h-4" />
@@ -473,12 +653,9 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                     </div>
                   </div>
 
-                  {/* Email & Phone in 2 Columns */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs font-medium text-white/70 mb-1 block">
-                        Email Address
-                      </label>
+                      <label className="text-xs font-medium text-white/70 mb-1 block">Email Address</label>
                       <div className="relative">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-white/40">
                           <Mail className="w-4 h-4" />
@@ -495,9 +672,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                     </div>
 
                     <div>
-                      <label className="text-xs font-medium text-white/70 mb-1 block">
-                        Mobile Number
-                      </label>
+                      <label className="text-xs font-medium text-white/70 mb-1 block">Mobile Number</label>
                       <div className="relative">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-white/40">
                           <Phone className="w-4 h-4" />
@@ -508,13 +683,11 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                           onChange={(e) => setRegPhone(e.target.value)}
                           placeholder="9876543210"
                           className="w-full pl-11 pr-3 py-3 bg-white/[0.07] border border-white/20 focus:border-[#C8F52F] rounded-full text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-[#C8F52F] transition-all"
-                          required
                         />
                       </div>
                     </div>
                   </div>
 
-                  {/* Location / Mandi Area */}
                   <div>
                     <label className="text-xs font-medium text-white/70 mb-1 block">
                       {selectedRole === "FARMER" ? "Village / District" : "Mandi Yard / City"}
@@ -533,11 +706,8 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                     </div>
                   </div>
 
-                  {/* Password */}
                   <div>
-                    <label className="text-xs font-medium text-white/70 mb-1 block">
-                      Password (minimum 8 characters)
-                    </label>
+                    <label className="text-xs font-medium text-white/70 mb-1 block">Password (minimum 8 characters)</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-white/40">
                         <Lock className="w-4 h-4" />
@@ -560,7 +730,6 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                     </div>
                   </div>
 
-                  {/* Terms */}
                   <label className="flex items-start gap-2 cursor-pointer text-xs text-white/70 pt-1">
                     <input
                       type="checkbox"
@@ -569,12 +738,9 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                       className="mt-0.5 w-4 h-4 rounded bg-white/10 border-white/20 accent-[#C8F52F]"
                       required
                     />
-                    <span>
-                      I agree to the Terms of Service and Privacy Policy.
-                    </span>
+                    <span>I agree to the Terms of Service and APMC Guidelines.</span>
                   </label>
 
-                  {/* Register Button */}
                   <button
                     type="submit"
                     disabled={isLoading}
@@ -584,7 +750,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                       <div className="w-5 h-5 border-2 border-[#0B2D1B] border-t-transparent rounded-full animate-spin" />
                     ) : (
                       <>
-                        <span>Create {roles.find((r) => r.id === selectedRole)?.label} Account</span>
+                        <span>Create {roles.find((r) => r.id === selectedRole)?.label} Account & Get OTP</span>
                         <ArrowUpRight size={18} strokeWidth={2.5} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                       </>
                     )}
@@ -596,7 +762,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
         </div>
       </main>
 
-      {/* BOTTOM: Hero-style rating & avatar bar */}
+      {/* FOOTER */}
       <footer className="relative z-20 w-full px-6 sm:px-8 md:px-12 lg:px-16 pb-6 md:pb-8">
         <div className="max-w-7xl mx-auto pt-4 border-t border-white/15 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="text-white/60 text-xs">

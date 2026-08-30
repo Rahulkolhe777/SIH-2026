@@ -1,5 +1,7 @@
 export type Role = "FARMER" | "MANDI_OPERATOR" | "ADMIN" | "TRADER" | "TRANSPORTER";
 
+export type OtpVerificationType = "EMAIL_VERIFICATION" | "LOGIN_OTP" | "PASSWORD_RESET";
+
 export interface User {
   id: string;
   name: string;
@@ -27,13 +29,13 @@ export interface LoginPayload {
 
 export interface SendOtpPayload {
   identifier: string;
-  type: "LOGIN" | "EMAIL_VERIFICATION" | "PHONE_VERIFICATION" | "PASSWORD_RESET";
+  type?: OtpVerificationType;
 }
 
 export interface VerifyOtpPayload {
   identifier: string;
   code: string;
-  type: "LOGIN" | "EMAIL_VERIFICATION" | "PHONE_VERIFICATION" | "PASSWORD_RESET";
+  type?: OtpVerificationType;
 }
 
 export interface AuthResponseData {
@@ -46,6 +48,7 @@ export interface AuthResponseData {
 export interface ApiResponse<T = any> {
   success: boolean;
   message?: string;
+  code?: string;
   data?: T;
   error?: {
     code: string;
@@ -60,6 +63,8 @@ export interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   otpSent: boolean;
+  pendingIdentifier: string | null;
+  pendingOtpType: OtpVerificationType;
   error: string | null;
   successMessage: string | null;
 }

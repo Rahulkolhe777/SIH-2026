@@ -29,6 +29,16 @@ export function App() {
     }
   }, [dispatch]);
 
+  // When user becomes authenticated while on /login or /register, redirect to their dashboard
+  useEffect(() => {
+    if (isAuthenticated && (currentPath === "/login" || currentPath === "/register" || currentPath === "/")) {
+      const targetRoute =
+        currentUser?.role === "MANDI_OPERATOR" ? "/mandi/dashboard" : "/farmer/dashboard";
+      window.history.pushState({}, "", targetRoute);
+      setCurrentPath(targetRoute);
+    }
+  }, [isAuthenticated, currentUser?.role, currentPath]);
+
   const handleAuthSuccess = () => {
     const targetRoute =
       currentUser?.role === "MANDI_OPERATOR" ? "/mandi/dashboard" : "/farmer/dashboard";
@@ -36,7 +46,7 @@ export function App() {
     setCurrentPath(targetRoute);
   };
 
-  // 1. Unauthenticated or Explicit /login, /register
+  // 1. Unauthenticated or Explicit /login, /register (when not logged in)
   if (!isAuthenticated || currentPath === "/login" || currentPath === "/register") {
     const initialMode = currentPath === "/register" ? "REGISTER" : "LOGIN";
     return <AuthPageContent initialMode={initialMode} onSuccess={handleAuthSuccess} />;
@@ -55,7 +65,7 @@ export function App() {
   // 3. Farmer Dashboard Route (Default for Farmers)
   return (
     <FarmerDashboard
-      userName={currentUser?.name || "Jane"}
+      userName={currentUser?.name || "Ramesh Patel"}
       avatarUrl="/images/avatar-1.jpg"
     />
   );
