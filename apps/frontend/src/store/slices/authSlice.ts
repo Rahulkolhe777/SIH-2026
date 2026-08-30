@@ -37,7 +37,7 @@ const initialToken: string | null = (() => {
 const initialState: AuthState = {
   user: initialUser,
   accessToken: initialToken,
-  isAuthenticated: !!initialToken && !!initialUser,
+  isAuthenticated: !!initialToken,
   isLoading: false,
   otpSent: false,
   pendingIdentifier: null,

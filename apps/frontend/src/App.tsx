@@ -11,7 +11,7 @@ export function App() {
   const { user: currentUser, isAuthenticated } = useAppSelector((state) => state.auth);
 
   const [currentPath, setCurrentPath] = useState<string>(() => {
-    return typeof window !== "undefined" ? window.location.pathname : "/login";
+    return typeof window !== "undefined" ? window.location.pathname : "/farmer/dashboard";
   });
 
   useEffect(() => {
@@ -29,50 +29,42 @@ export function App() {
     }
   }, [dispatch]);
 
+  // Automatic Route Guard: If authenticated, redirect away from /login, /register, or /
+  useEffect(() => {
+    if (isAuthenticated && (currentPath === "/login" || currentPath === "/register" || currentPath === "/")) {
+      const targetRoute =
+        currentUser?.role === "MANDI_OPERATOR" ? "/mandi/dashboard" : "/farmer/dashboard";
+      window.history.replaceState({}, "", targetRoute);
+      setCurrentPath(targetRoute);
+    }
+  }, [isAuthenticated, currentUser?.role, currentPath]);
+
   const handleAuthSuccess = () => {
     const targetRoute =
       currentUser?.role === "MANDI_OPERATOR" ? "/mandi/dashboard" : "/farmer/dashboard";
-    window.history.pushState({}, "", targetRoute);
+    window.history.replaceState({}, "", targetRoute);
     setCurrentPath(targetRoute);
   };
 
-  // 1. Root /, /login, or /register routes
-  if (currentPath === "/login" || currentPath === "/register" || currentPath === "/") {
-    if (isAuthenticated) {
-      if (currentUser?.role === "MANDI_OPERATOR") {
-        return (
-          <MandiOperatorDashboard
-            operatorName={currentUser?.name || "Operator"}
-            mandiName="Indore APMC Yard #01"
-          />
-        );
-      }
+  // 1. If Authenticated, render appropriate Dashboard (blocks /login and /register)
+  if (isAuthenticated) {
+    if (currentPath === "/mandi/dashboard" || currentUser?.role === "MANDI_OPERATOR") {
       return (
-        <FarmerDashboard
-          userName={currentUser?.name || "Ramesh Patel"}
-          avatarUrl="/images/avatar-1.jpg"
+        <MandiOperatorDashboard
+          operatorName={currentUser?.name || "Operator"}
+          mandiName="Indore APMC Yard #01"
         />
       );
     }
-    const initialMode = currentPath === "/register" ? "REGISTER" : "LOGIN";
-    return <AuthPageContent initialMode={initialMode} onSuccess={handleAuthSuccess} />;
-  }
-
-  // 2. Mandi Operator Dashboard Route
-  if (currentPath === "/mandi/dashboard" || (currentPath === "/dashboard" && currentUser?.role === "MANDI_OPERATOR")) {
     return (
-      <MandiOperatorDashboard
-        operatorName={currentUser?.name || "Operator"}
-        mandiName="Indore APMC Yard #01"
+      <FarmerDashboard
+        userName={currentUser?.name || "Ramesh Patel"}
+        avatarUrl="/images/avatar-1.jpg"
       />
     );
   }
 
-  // 3. Farmer Dashboard Route (Default for /farmer/dashboard and all other views)
-  return (
-    <FarmerDashboard
-      userName={currentUser?.name || "Ramesh Patel"}
-      avatarUrl="/images/avatar-1.jpg"
-    />
-  );
+  // 2. If Unauthenticated, render AuthPageContent
+  const initialMode = currentPath === "/register" ? "REGISTER" : "LOGIN";
+  return <AuthPageContent initialMode={initialMode} onSuccess={handleAuthSuccess} />;
 }
