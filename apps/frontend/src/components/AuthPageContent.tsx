@@ -16,6 +16,8 @@ import {
   Landmark,
   KeyRound,
   RotateCw,
+  LogIn,
+  Send,
 } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../store";
 import {
@@ -25,8 +27,9 @@ import {
   sendOtpThunk,
   verifyOtpThunk,
   setPendingVerification,
+  clearPendingVerification,
 } from "../store/slices/authSlice";
-import type { Role, OtpVerificationType } from "../interfaces";
+import type { Role } from "../interfaces";
 
 type AuthMode = "LOGIN" | "REGISTER" | "OTP_VERIFY";
 type LoginMethod = "PASSWORD" | "OTP";
@@ -83,6 +86,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
   const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [resendCountdown, setResendCountdown] = useState(60);
+  const isSubmittingRef = useRef(false);
 
   const [scrollY, setScrollY] = useState(0);
 
@@ -98,17 +102,16 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
       const timer = setTimeout(() => {
         if (onSuccess) onSuccess();
         else window.location.href = "/farmer/dashboard";
-      }, 700);
+      }, 500);
       return () => clearTimeout(timer);
     }
   }, [isAuthenticated, onSuccess]);
 
-  // When pendingIdentifier is set in Redux, automatically switch to OTP_VERIFY view
+  // When an unverified login triggers pendingIdentifier, switch to OTP_VERIFY view
   useEffect(() => {
     if (pendingIdentifier && authMode !== "OTP_VERIFY") {
       setAuthMode("OTP_VERIFY");
       setResendCountdown(60);
-      // Focus first OTP input
       setTimeout(() => {
         inputRefs.current[0]?.focus();
       }, 300);
@@ -127,8 +130,34 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
   const switchMode = (mode: AuthMode) => {
     setAuthMode(mode);
     dispatch(clearAuthMessages());
-    if (mode === "LOGIN") window.history.pushState({}, "", "/login");
-    else if (mode === "REGISTER") window.history.pushState({}, "", "/register");
+    if (mode === "LOGIN") {
+      dispatch(clearPendingVerification());
+      window.history.pushState({}, "", "/login");
+    } else if (mode === "REGISTER") {
+      dispatch(clearPendingVerification());
+      window.history.pushState({}, "", "/register");
+    }
+  };
+
+  // Safe single-flight OTP submit
+  const triggerOtpVerification = async (code: string) => {
+    if (isSubmittingRef.current || code.length < 6) return;
+    isSubmittingRef.current = true;
+
+    const activeId = pendingIdentifier || identifier.trim() || regEmail.trim();
+    try {
+      await dispatch(
+        verifyOtpThunk({
+          identifier: activeId,
+          code,
+          type: pendingOtpType || "EMAIL_VERIFICATION",
+        })
+      ).unwrap();
+    } catch (err) {
+      console.error("OTP verification error:", err);
+    } finally {
+      isSubmittingRef.current = false;
+    }
   };
 
   // Handle individual OTP digit typing and auto-focus
@@ -138,22 +167,19 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
     newDigits[index] = cleanVal;
     setOtpDigits(newDigits);
 
-    // Auto-advance
+    if (error) {
+      dispatch(clearAuthMessages());
+    }
+
+    // Auto-advance to next box
     if (cleanVal && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
 
-    // Auto-submit if all 6 digits filled
+    // Auto-submit when all 6 digits filled
     const fullCode = newDigits.join("");
     if (fullCode.length === 6 && !newDigits.includes("")) {
-      const activeId = pendingIdentifier || identifier || regEmail;
-      dispatch(
-        verifyOtpThunk({
-          identifier: activeId,
-          code: fullCode,
-          type: pendingOtpType || "EMAIL_VERIFICATION",
-        })
-      );
+      triggerOtpVerification(fullCode);
     }
   };
 
@@ -169,39 +195,43 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
     if (!pasted) return;
 
     const newDigits = [...otpDigits];
-    for (let i = 0; i < pasted.length; i++) {
+    for (let i = 0; i < 6; i++) {
       newDigits[i] = pasted[i] || "";
     }
     setOtpDigits(newDigits);
 
     if (pasted.length === 6) {
       inputRefs.current[5]?.focus();
-      const activeId = pendingIdentifier || identifier || regEmail;
-      dispatch(
-        verifyOtpThunk({
-          identifier: activeId,
-          code: pasted,
-          type: pendingOtpType || "EMAIL_VERIFICATION",
-        })
-      );
+      triggerOtpVerification(pasted);
     } else {
       inputRefs.current[pasted.length]?.focus();
     }
   };
 
-  const handleSendOtp = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!identifier.trim()) return;
-    dispatch(
+  const triggerSendOtp = async (targetId?: string) => {
+    const idToSend = (targetId || identifier || regEmail).trim();
+    if (!idToSend) return;
+
+    dispatch(clearAuthMessages());
+    const result = await dispatch(
       sendOtpThunk({
-        identifier: identifier.trim(),
+        identifier: idToSend,
         type: "LOGIN_OTP",
       })
     );
+
+    if (sendOtpThunk.fulfilled.match(result)) {
+      setAuthMode("OTP_VERIFY");
+      setResendCountdown(60);
+      setOtpDigits(["", "", "", "", "", ""]);
+      setTimeout(() => {
+        inputRefs.current[0]?.focus();
+      }, 300);
+    }
   };
 
   const handleResendOtp = () => {
-    const activeId = pendingIdentifier || identifier || regEmail;
+    const activeId = pendingIdentifier || identifier.trim() || regEmail.trim();
     if (!activeId) return;
     dispatch(
       sendOtpThunk({
@@ -212,7 +242,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
     setResendCountdown(60);
   };
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     dispatch(clearAuthMessages());
 
@@ -220,46 +250,51 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
 
     if (loginMethod === "PASSWORD") {
       if (!password) return;
-      dispatch(loginUserThunk({ identifier: identifier.trim(), password }));
+      await dispatch(loginUserThunk({ identifier: identifier.trim(), password }));
     } else {
-      handleSendOtp(e);
+      triggerSendOtp(identifier.trim());
     }
   };
 
-  const handleRegisterSubmit = (e: React.FormEvent) => {
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     dispatch(clearAuthMessages());
 
-    if (!fullName.trim() || (!regEmail.trim() && !regPhone.trim()) || regPassword.length < 8) {
+    const targetEmail = regEmail.trim();
+    if (!fullName.trim() || !targetEmail || regPassword.length < 8) {
       return;
     }
 
-    dispatch(
+    const result = await dispatch(
       registerUserThunk({
         name: fullName.trim(),
-        email: regEmail.trim(),
+        email: targetEmail,
         phone: regPhone.trim() || undefined,
         password: regPassword,
         role: selectedRole,
         location: location.trim() || undefined,
       })
     );
+
+    // ONLY switch to OTP view if registration/OTP generation succeeded
+    if (registerUserThunk.fulfilled.match(result)) {
+      setAuthMode("OTP_VERIFY");
+      setResendCountdown(60);
+      setOtpDigits(["", "", "", "", "", ""]);
+      setTimeout(() => {
+        inputRefs.current[0]?.focus();
+      }, 300);
+    }
   };
 
   const handleVerifyOtpSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const code = otpDigits.join("");
     if (code.length < 6) return;
-
-    const activeId = pendingIdentifier || identifier || regEmail;
-    dispatch(
-      verifyOtpThunk({
-        identifier: activeId,
-        code,
-        type: pendingOtpType || "EMAIL_VERIFICATION",
-      })
-    );
+    triggerOtpVerification(code);
   };
+
+  const activeDisplayId = pendingIdentifier || identifier.trim() || regEmail.trim();
 
   return (
     <div className="relative w-full min-h-screen bg-[#06180E] text-white flex flex-col justify-between overflow-x-hidden selection:bg-[#C8F52F] selection:text-[#0B2D1B]">
@@ -312,7 +347,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
 
             <p className="text-white/80 text-sm sm:text-base leading-relaxed max-w-md font-light">
               {authMode === "OTP_VERIFY"
-                ? `Enter the 6-digit security code sent to ${pendingIdentifier || "your contact"}. This activates your instant digital pass.`
+                ? `Enter the 6-digit security OTP sent to ${activeDisplayId || "your contact"}. Verification unlocks your instant APMC pass.`
                 : authMode === "LOGIN"
                 ? "Sign in to book real-time mandi unloading slots, track gate entry QR tokens, and access live rates."
                 : "Create an account in under 2 minutes to eliminate waiting lines, verify digital tokens, and receive direct payments."}
@@ -346,7 +381,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
             <div className="bg-black/45 backdrop-blur-2xl border border-white/20 rounded-[32px] md:rounded-[40px] p-6 sm:p-8 md:p-10 shadow-2xl shadow-black/60 relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#C8F52F] to-transparent opacity-60" />
 
-              {/* Mode Switcher (Hidden during OTP Verification) */}
+              {/* Mode Switcher (Visible on Register/Login, hidden on OTP) */}
               {authMode !== "OTP_VERIFY" ? (
                 <div className="flex p-1 bg-white/10 backdrop-blur-md border border-white/15 rounded-full mb-6 shadow-inner">
                   <button
@@ -446,11 +481,40 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                 </div>
               )}
 
-              {/* Status Alert from Redux */}
+              {/* Status Alerts */}
               {error && (
-                <div className="mb-5 p-3.5 rounded-2xl text-xs font-medium border flex items-center gap-2 bg-red-500/20 border-red-500/30 text-red-200">
-                  <ShieldCheck className="w-4 h-4 shrink-0" />
-                  <span>{error}</span>
+                <div className="mb-5 p-3.5 rounded-2xl text-xs font-medium border flex items-center justify-between gap-2 bg-red-500/20 border-red-500/30 text-red-200">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                  
+                  {/* Action 1: If account exists on Register, offer instant Sign In */}
+                  {error.includes("already exists") && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIdentifier(regEmail || identifier);
+                        switchMode("LOGIN");
+                      }}
+                      className="px-2.5 py-1 bg-white/20 hover:bg-white/30 text-white rounded-lg text-[11px] font-semibold whitespace-nowrap cursor-pointer flex items-center gap-1"
+                    >
+                      <LogIn size={12} />
+                      <span>Sign In</span>
+                    </button>
+                  )}
+
+                  {/* Action 2: If login fails with invalid credentials, offer 1-click Sign In with OTP */}
+                  {(error.includes("Invalid") || error.includes("credentials")) && (
+                    <button
+                      type="button"
+                      onClick={() => triggerSendOtp(identifier)}
+                      className="px-2.5 py-1 bg-[#C8F52F] text-[#0B2D1B] hover:bg-[#b8e826] rounded-lg text-[11px] font-semibold whitespace-nowrap cursor-pointer flex items-center gap-1"
+                    >
+                      <Send size={11} />
+                      <span>Get OTP</span>
+                    </button>
+                  )}
                 </div>
               )}
               {successMessage && (
@@ -470,7 +534,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                     <p className="text-xs text-white/60">
                       Code dispatched to{" "}
                       <span className="font-semibold text-[#C8F52F]">
-                        {pendingIdentifier || identifier || regEmail}
+                        {activeDisplayId}
                       </span>
                     </p>
                   </div>
@@ -557,23 +621,23 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                           : "border-transparent text-white/50 hover:text-white"
                       }`}
                     >
-                      Phone OTP
+                      Email / Phone OTP
                     </button>
                   </div>
 
                   <div>
                     <label className="text-xs font-medium text-white/70 mb-1.5 block">
-                      {loginMethod === "OTP" ? "Mobile Number" : "Email or Phone Number"}
+                      Email or Phone Number
                     </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-white/40">
-                        {loginMethod === "OTP" ? <Phone className="w-4 h-4" /> : <Mail className="w-4 h-4" />}
+                        {loginMethod === "OTP" ? <Mail className="w-4 h-4" /> : <User className="w-4 h-4" />}
                       </div>
                       <input
-                        type={loginMethod === "OTP" ? "tel" : "text"}
+                        type="text"
                         value={identifier}
                         onChange={(e) => setIdentifier(e.target.value)}
-                        placeholder={loginMethod === "OTP" ? "+91 98765 43210" : "user@agrovia.in / 9876543210"}
+                        placeholder="rupeshjagtap157@gmail.com / 9876543210"
                         className="w-full pl-11 pr-4 py-3.5 bg-white/[0.07] border border-white/20 focus:border-[#C8F52F] rounded-full text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-[#C8F52F] transition-all"
                         required
                       />
@@ -584,7 +648,13 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
                         <label className="text-xs font-medium text-white/70">Password</label>
-                        <a href="#forgot" className="text-xs text-[#C8F52F] hover:underline">Forgot password?</a>
+                        <button
+                          type="button"
+                          onClick={() => triggerSendOtp(identifier)}
+                          className="text-xs text-[#C8F52F] hover:underline cursor-pointer"
+                        >
+                          Sign in with OTP instead?
+                        </button>
                       </div>
                       <div className="relative">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-white/40">
@@ -618,7 +688,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                       <div className="w-5 h-5 border-2 border-[#0B2D1B] border-t-transparent rounded-full animate-spin" />
                     ) : loginMethod === "OTP" ? (
                       <>
-                        <span>Get 6-Digit OTP Code</span>
+                        <span>Send 6-Digit OTP Code</span>
                         <ArrowUpRight size={18} strokeWidth={2.5} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                       </>
                     ) : (
@@ -750,7 +820,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
                       <div className="w-5 h-5 border-2 border-[#0B2D1B] border-t-transparent rounded-full animate-spin" />
                     ) : (
                       <>
-                        <span>Create {roles.find((r) => r.id === selectedRole)?.label} Account & Get OTP</span>
+                        <span>Create {roles.find((r) => r.id === selectedRole)?.label} Account & Verify OTP</span>
                         <ArrowUpRight size={18} strokeWidth={2.5} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                       </>
                     )}
