@@ -73,7 +73,7 @@ export default function Hero() {
             <div className="mt-7 sm:mt-8 flex flex-wrap items-center gap-3.5 sm:gap-4">
               {/* Button 1: Book Mandi Slot */}
               <a
-                href="#solutions"
+                href={`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001"}/register`}
                 className="group inline-flex items-center justify-center gap-2.5 bg-[#C8F52F] hover:bg-[#b8e826] active:scale-98 text-[#0B2D1B] font-semibold px-6 sm:px-7 py-3.5 sm:py-4 rounded-full text-sm sm:text-[15px] transition-all duration-300 shadow-lg shadow-black/25 hover:shadow-[#C8F52F]/25 cursor-pointer"
               >
                 <span>Book Mandi Slot</span>
@@ -86,7 +86,7 @@ export default function Hero() {
 
               {/* Button 2: Mandi Portal */}
               <a
-                href="#farmers"
+                href={`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001"}/login`}
                 className="inline-flex items-center justify-center bg-white/10 hover:bg-white/20 active:scale-98 backdrop-blur-md border border-white/40 text-white font-medium px-6 sm:px-7 py-3.5 sm:py-4 rounded-full text-sm sm:text-[15px] transition-all duration-300 hover:-translate-y-0.5 hover:border-white shadow-sm cursor-pointer"
               >
                 Mandi Portal
