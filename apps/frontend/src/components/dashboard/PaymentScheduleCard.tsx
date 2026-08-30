@@ -1,88 +1,67 @@
-import React, { useState, useCallback, memo } from "react";
-import { MoreVertical, Check } from "lucide-react";
-import type { PaymentScheduleItem } from "../../interfaces";
+import React, { memo } from "react";
+import { TrendingUp, Sparkles, ShieldCheck } from "lucide-react";
 
-const initialSchedule: PaymentScheduleItem[] = [
-  { id: "sched-1", date: "Feb 16", merchant: "Bills", amount: 281.17, isChecked: true, dateBadgeColor: "gray" },
-  { id: "sched-2", date: "Feb 16", merchant: "Spotify", amount: 181.36, isChecked: true, dateBadgeColor: "gray" },
-  { id: "sched-3", date: "Feb 18", merchant: "Framer", amount: 21.58, isChecked: false, dateBadgeColor: "yellow" },
-  { id: "sched-4", date: "Feb 21", merchant: "Adobe", amount: 59.25, isChecked: false, dateBadgeColor: "yellow" },
-];
-
-// Pure memoized single row component to isolate re-renders on checkbox click
-interface ScheduleRowProps {
-  item: PaymentScheduleItem;
-  onToggle: (id: string) => void;
+interface MandiPriceItem {
+  id: string;
+  crop: string;
+  mspRate: string;
+  marketRate: string;
+  change: string;
+  isPositive: boolean;
 }
 
-const ScheduleRow = memo(function ScheduleRow({ item, onToggle }: ScheduleRowProps) {
-  return (
-    <div
-      onClick={() => onToggle(item.id)}
-      className="flex items-center justify-between py-2.5 px-2 rounded-xl hover:bg-[#F7F8F8] transition-colors cursor-pointer select-none"
-    >
-      {/* Left: Date Badge + Merchant */}
-      <div className="flex items-center gap-3">
-        {/* Date badge: Feb 16 is light gray, Feb 18/21 is bright yellow */}
-        <div
-          className={`w-14 h-9 rounded-xl flex items-center justify-center text-xs font-semibold tracking-tight shadow-sm shrink-0 ${
-            item.dateBadgeColor === "yellow"
-              ? "bg-[#FFE600] text-[#111315]"
-              : "bg-[#EAECEF] text-[#4B5563]"
-          }`}
-        >
-          {item.date}
-        </div>
-        <span className="text-sm font-semibold text-[#111315]">{item.merchant}</span>
-      </div>
-
-      {/* Right: Amount + Custom Checkbox */}
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-semibold text-[#111315]">
-          ${item.amount.toFixed(2)}
-        </span>
-
-        {/* Checkbox: Blue square with white check when checked, subtle border when unchecked */}
-        <div
-          className={`w-5 h-5 rounded-md flex items-center justify-center border transition-all duration-200 ${
-            item.isChecked
-              ? "bg-[#3B82F6] border-[#3B82F6] text-white shadow-sm"
-              : "bg-white border-[#D1D5DB]"
-          }`}
-        >
-          {item.isChecked && <Check size={13} strokeWidth={3} />}
-        </div>
-      </div>
-    </div>
-  );
-});
+const mandiPrices: MandiPriceItem[] = [
+  { id: "m-1", crop: "Sharbati Wheat", mspRate: "₹2,275", marketRate: "₹2,425/Qtl", change: "+₹45", isPositive: true },
+  { id: "m-2", crop: "Yellow Soybean", mspRate: "₹4,600", marketRate: "₹4,890/Qtl", change: "+₹80", isPositive: true },
+  { id: "m-3", crop: "Basmati Rice 1121", mspRate: "₹3,200", marketRate: "₹3,850/Qtl", change: "+₹120", isPositive: true },
+  { id: "m-4", crop: "Mustard Seed", mspRate: "₹5,450", marketRate: "₹5,650/Qtl", change: "+₹65", isPositive: true },
+];
 
 export const PaymentScheduleCard = memo(function PaymentScheduleCard() {
-  const [schedule, setSchedule] = useState<PaymentScheduleItem[]>(initialSchedule);
-
-  const handleToggle = useCallback((id: string) => {
-    setSchedule((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, isChecked: !item.isChecked } : item))
-    );
-  }, []);
-
   return (
-    <div className="flex-1 bg-white rounded-[26px] border border-[#E8EAEC] p-6 sm:p-7 flex flex-col justify-between shadow-sm hover:border-[#DDE1E6] transition-colors">
+    <div className="flex-1 bg-white rounded-[26px] border border-[#E8EAEC] p-6 sm:p-7 flex flex-col justify-between shadow-sm hover:border-[#DDE1E6] transition-colors text-left selection:bg-[#C8F52F] selection:text-[#0B2D1B]">
       <div>
         {/* Header */}
         <div className="flex items-center justify-between pb-3">
-          <h3 className="text-xl font-semibold text-[#111315]">Payment schedule</h3>
-          <button className="text-[#9CA3AF] hover:text-[#111315] p-1 cursor-pointer">
-            <MoreVertical size={16} />
-          </button>
+          <div>
+            <h3 className="text-lg font-bold text-[#111315]">Live APMC Rates</h3>
+            <span className="text-[11px] text-[#6C727F]">Indore Yard Real-Time Price Index</span>
+          </div>
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#059669] bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+            <TrendingUp size={12} />
+            <span>Bullish Market</span>
+          </span>
         </div>
 
-        {/* Schedule List */}
-        <div className="space-y-1 divide-y divide-[#F5F7F8]">
-          {schedule.map((item) => (
-            <ScheduleRow key={item.id} item={item} onToggle={handleToggle} />
+        {/* Commodity Prices List */}
+        <div className="space-y-2.5 pt-1">
+          {mandiPrices.map((item) => (
+            <div
+              key={item.id}
+              className="flex items-center justify-between p-2.5 rounded-xl bg-[#F8F9FA] hover:bg-[#F0F2F5] transition-colors border border-[#E8EAED]"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-white border border-[#E2E5E9] flex items-center justify-center font-bold text-xs text-[#111315]">
+                  {item.crop[0]}
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-[#111315]">{item.crop}</div>
+                  <div className="text-[10px] text-[#8A92A0]">Govt MSP: {item.mspRate}</div>
+                </div>
+              </div>
+
+              <div className="text-right">
+                <div className="text-xs font-bold text-[#111315]">{item.marketRate}</div>
+                <div className="text-[10px] font-bold text-[#059669]">{item.change} Today</div>
+              </div>
+            </div>
           ))}
         </div>
+      </div>
+
+      <div className="pt-3 text-[11px] text-[#8A92A0] border-t border-[#F5F7F8] mt-2 flex items-center justify-between">
+        <span>Updated 5 mins ago from Mandi Board</span>
+        <span className="font-semibold text-[#111315]">Direct Bidding Enabled</span>
       </div>
     </div>
   );

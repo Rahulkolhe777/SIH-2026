@@ -11,7 +11,7 @@ export function App() {
   const { user: currentUser, isAuthenticated } = useAppSelector((state) => state.auth);
 
   const [currentPath, setCurrentPath] = useState<string>(() => {
-    return typeof window !== "undefined" ? window.location.pathname : "/farmer/dashboard";
+    return typeof window !== "undefined" ? window.location.pathname : "/login";
   });
 
   useEffect(() => {
@@ -36,8 +36,24 @@ export function App() {
     setCurrentPath(targetRoute);
   };
 
-  // 1. Explicit /login or /register
-  if (currentPath === "/login" || currentPath === "/register") {
+  // 1. Root /, /login, or /register routes
+  if (currentPath === "/login" || currentPath === "/register" || currentPath === "/") {
+    if (isAuthenticated) {
+      if (currentUser?.role === "MANDI_OPERATOR") {
+        return (
+          <MandiOperatorDashboard
+            operatorName={currentUser?.name || "Operator"}
+            mandiName="Indore APMC Yard #01"
+          />
+        );
+      }
+      return (
+        <FarmerDashboard
+          userName={currentUser?.name || "Ramesh Patel"}
+          avatarUrl="/images/avatar-1.jpg"
+        />
+      );
+    }
     const initialMode = currentPath === "/register" ? "REGISTER" : "LOGIN";
     return <AuthPageContent initialMode={initialMode} onSuccess={handleAuthSuccess} />;
   }

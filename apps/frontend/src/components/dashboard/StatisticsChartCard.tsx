@@ -1,33 +1,18 @@
 import React, { useState, useMemo, memo } from "react";
-import { Search, ChevronDown, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { ChevronDown, ArrowUpRight, TrendingUp } from "lucide-react";
 
 const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep"];
 
 const defaultData = {
-  incomePoints: [42, 58, 52, 78, 68, 74, 82, 85, 80],
-  expensePoints: [26, 38, 34, 56, 48, 52, 62, 68, 64],
-  incomeTooltip: "$8,554.79",
-  expenseTooltip: "$6,814.52",
-};
-
-const dataset: Record<string, { incomePoints: number[]; expensePoints: number[]; incomeTooltip: string; expenseTooltip: string }> = {
-  Jan: { incomePoints: [35, 45, 40, 60, 50, 55, 65, 70, 68], expensePoints: [20, 30, 28, 42, 35, 38, 45, 48, 46], incomeTooltip: "$7,120.40", expenseTooltip: "$5,430.10" },
-  Feb: { incomePoints: [40, 50, 48, 65, 58, 62, 70, 75, 72], expensePoints: [25, 35, 30, 45, 40, 42, 50, 52, 49], incomeTooltip: "$7,840.50", expenseTooltip: "$5,910.20" },
-  Mar: { incomePoints: [45, 55, 50, 70, 62, 68, 75, 80, 78], expensePoints: [28, 38, 35, 50, 44, 48, 54, 58, 55], incomeTooltip: "$8,190.00", expenseTooltip: "$6,250.80" },
-  Apr: { incomePoints: [50, 60, 55, 72, 65, 70, 78, 82, 80], expensePoints: [30, 40, 38, 52, 46, 50, 56, 60, 58], incomeTooltip: "$8,320.10", expenseTooltip: "$6,540.30" },
-  May: defaultData,
-  Jun: { incomePoints: [48, 62, 56, 80, 72, 76, 84, 88, 82], expensePoints: [30, 42, 36, 58, 50, 54, 64, 70, 66], incomeTooltip: "$8,890.30", expenseTooltip: "$7,120.00" },
-  Jul: { incomePoints: [52, 65, 60, 82, 75, 78, 86, 90, 85], expensePoints: [32, 45, 40, 60, 52, 56, 66, 72, 68], incomeTooltip: "$9,150.40", expenseTooltip: "$7,340.50" },
-  Aug: { incomePoints: [50, 64, 58, 80, 73, 77, 85, 88, 84], expensePoints: [31, 44, 38, 59, 51, 55, 65, 71, 67], incomeTooltip: "$8,970.00", expenseTooltip: "$7,210.00" },
-  Sep: { incomePoints: [46, 60, 54, 76, 70, 74, 82, 85, 81], expensePoints: [29, 41, 36, 57, 49, 53, 63, 69, 65], incomeTooltip: "$8,620.80", expenseTooltip: "$6,940.20" },
+  marketPricePoints: [55, 62, 58, 75, 68, 78, 85, 90, 88],
+  mspBaselinePoints: [45, 45, 45, 48, 48, 48, 52, 52, 52],
+  marketTooltip: "₹2,580/Qtl (Market Rate)",
+  mspTooltip: "₹2,275/Qtl (Govt MSP)",
 };
 
 export const StatisticsChartCard = memo(function StatisticsChartCard() {
   const [selectedMonth, setSelectedMonth] = useState("May");
 
-  const currentData = useMemo(() => dataset[selectedMonth] ?? defaultData, [selectedMonth]);
-
-  // Generate SVG path strings
   const width = 580;
   const height = 190;
   const paddingX = 25;
@@ -49,46 +34,47 @@ export const StatisticsChartCard = memo(function StatisticsChartCard() {
     }, "");
   };
 
-  const incomePath = useMemo(() => getPath(currentData.incomePoints), [currentData]);
-  const expensePath = useMemo(() => getPath(currentData.expensePoints), [currentData]);
+  const marketPath = useMemo(() => getPath(defaultData.marketPricePoints), []);
+  const mspPath = useMemo(() => getPath(defaultData.mspBaselinePoints), []);
 
-  // Selected point index (May is index 4)
   const selectedIndex = Math.max(0, months.indexOf(selectedMonth));
   const activeX = paddingX + selectedIndex * stepX;
-  const incomeVal = currentData.incomePoints[selectedIndex] ?? 80;
-  const expenseVal = currentData.expensePoints[selectedIndex] ?? 60;
-  const activeIncomeY = height - (incomeVal / 100) * (height - 30) - 15;
-  const activeExpenseY = height - (expenseVal / 100) * (height - 30) - 15;
+  const marketVal = defaultData.marketPricePoints[selectedIndex] ?? 80;
+  const mspVal = defaultData.mspBaselinePoints[selectedIndex] ?? 50;
+  const activeMarketY = height - (marketVal / 100) * (height - 30) - 15;
+  const activeMspY = height - (mspVal / 100) * (height - 30) - 15;
 
   return (
-    <div className="w-full bg-white rounded-[26px] border border-[#E8EAEC] p-6 sm:p-7 flex flex-col justify-between shadow-sm hover:border-[#DDE1E6] transition-colors">
+    <div className="w-full bg-white rounded-[26px] border border-[#E8EAEC] p-6 sm:p-7 flex flex-col justify-between shadow-sm hover:border-[#DDE1E6] transition-colors text-left selection:bg-[#C8F52F] selection:text-[#0B2D1B]">
       {/* Header Row */}
       <div className="flex items-center justify-between pb-4">
-        <h3 className="text-xl font-semibold text-[#111315]">Statistics</h3>
+        <div>
+          <h3 className="text-xl font-bold text-[#111315]">APMC Mandi Price Trends</h3>
+          <span className="text-xs text-[#6C727F]">Indore Yard Market Rate vs Minimum Support Price (MSP)</span>
+        </div>
 
         <div className="flex items-center gap-2">
-          {/* Monthly Dropdown Pill */}
-          <button className="h-[38px] px-4 rounded-full bg-[#F5F7F8] hover:bg-[#EBEDF0] border border-[#E2E5E9] flex items-center gap-1.5 text-xs font-medium text-[#111315] transition-colors cursor-pointer">
-            <span>Monthly</span>
-            <ChevronDown size={14} className="text-[#64748B]" />
-          </button>
-
-          {/* Search Button */}
-          <button className="w-[38px] h-[38px] rounded-full border border-[#E2E5E9] hover:bg-[#F5F7F8] flex items-center justify-center text-[#64748B] transition-colors cursor-pointer" aria-label="Search statistics">
-            <Search size={15} />
-          </button>
+          <div className="flex items-center gap-3 text-xs font-semibold">
+            <span className="flex items-center gap-1.5 text-[#10B981]">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#10B981]" />
+              Market Rate
+            </span>
+            <span className="flex items-center gap-1.5 text-[#6B7280]">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#6B7280]" />
+              MSP Floor
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* SVG Chart Area with Double Lines */}
+      {/* SVG Chart Area */}
       <div className="relative w-full h-[200px] my-2 select-none">
         <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
-          {/* Subtle horizontal grid lines */}
           <line x1={paddingX} y1={height * 0.25} x2={width - paddingX} y2={height * 0.25} stroke="#F1F3F5" strokeDasharray="4 4" />
           <line x1={paddingX} y1={height * 0.55} x2={width - paddingX} y2={height * 0.55} stroke="#F1F3F5" strokeDasharray="4 4" />
           <line x1={paddingX} y1={height * 0.85} x2={width - paddingX} y2={height * 0.85} stroke="#F1F3F5" strokeDasharray="4 4" />
 
-          {/* Active Vertical Dashed Guide Line */}
+          {/* Active Vertical Line */}
           <line
             x1={activeX}
             y1={10}
@@ -97,55 +83,47 @@ export const StatisticsChartCard = memo(function StatisticsChartCard() {
             stroke="#94A3B8"
             strokeWidth="1.5"
             strokeDasharray="3 3"
-            className="transition-all duration-300 ease-out"
           />
 
-          {/* Orange Expense Line */}
+          {/* MSP Baseline */}
           <path
-            d={expensePath}
+            d={mspPath}
             fill="none"
-            stroke="#F97316"
-            strokeWidth="3"
+            stroke="#6B7280"
+            strokeWidth="2.5"
+            strokeDasharray="6 4"
             strokeLinecap="round"
-            className="transition-all duration-500 ease-out"
           />
 
-          {/* Blue Income Line */}
+          {/* Market Price Line */}
           <path
-            d={incomePath}
+            d={marketPath}
             fill="none"
-            stroke="#3B82F6"
+            stroke="#10B981"
             strokeWidth="3.5"
             strokeLinecap="round"
-            className="transition-all duration-500 ease-out"
           />
 
-          {/* Selected Data Points */}
-          <circle cx={activeX} cy={activeIncomeY} r="5" fill="#3B82F6" stroke="white" strokeWidth="2.5" className="transition-all duration-300 shadow-sm" />
-          <circle cx={activeX} cy={activeExpenseY} r="5" fill="#F97316" stroke="white" strokeWidth="2.5" className="transition-all duration-300 shadow-sm" />
+          <circle cx={activeX} cy={activeMarketY} r="5" fill="#10B981" stroke="white" strokeWidth="2.5" />
+          <circle cx={activeX} cy={activeMspY} r="5" fill="#6B7280" stroke="white" strokeWidth="2.5" />
         </svg>
 
-        {/* Floating Tooltips */}
+        {/* Floating Tooltip */}
         <div
           className="absolute pointer-events-none flex items-center gap-1.5 transition-all duration-300 ease-out z-20"
           style={{
             left: `${(activeX / width) * 100}%`,
-            top: `${(activeIncomeY / height) * 100 - 24}%`,
+            top: `${(activeMarketY / height) * 100 - 24}%`,
             transform: "translate(-50%, -100%)",
           }}
         >
-          {/* Black Tooltip (Income) */}
-          <div className="bg-[#111315] text-white px-2.5 py-1 rounded-full text-[11px] font-semibold shadow-md whitespace-nowrap">
-            {currentData.incomeTooltip}
-          </div>
-          {/* White Tooltip (Expense) */}
-          <div className="bg-white border border-[#E2E5E9] text-[#111315] px-2.5 py-1 rounded-full text-[11px] font-semibold shadow-md whitespace-nowrap">
-            {currentData.expenseTooltip}
+          <div className="bg-[#111315] text-white px-2.5 py-1 rounded-full text-[11px] font-bold shadow-md whitespace-nowrap">
+            {defaultData.marketTooltip}
           </div>
         </div>
       </div>
 
-      {/* Horizontal Month Pill Selector */}
+      {/* Month Selector */}
       <div className="flex items-center justify-between gap-1 pt-1 pb-4">
         {months.map((m) => {
           const isSelected = selectedMonth === m;
@@ -153,9 +131,9 @@ export const StatisticsChartCard = memo(function StatisticsChartCard() {
             <button
               key={m}
               onClick={() => setSelectedMonth(m)}
-              className={`px-2.5 sm:px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 cursor-pointer ${
+              className={`px-2.5 sm:px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                 isSelected
-                  ? "bg-[#E2E5E9] text-[#111315] font-semibold shadow-inner"
+                  ? "bg-[#111315] text-white shadow-sm"
                   : "text-[#8C93A0] hover:text-[#111315] hover:bg-[#F3F5F7]"
               }`}
             >
@@ -165,35 +143,31 @@ export const StatisticsChartCard = memo(function StatisticsChartCard() {
         })}
       </div>
 
-      {/* Divider */}
       <div className="w-full h-px bg-[#E8EAEC] mb-4" />
 
-      {/* Bottom Summary: Average Income & Average Expenses */}
+      {/* Bottom Metrics */}
       <div className="grid grid-cols-2 gap-4">
-        {/* Left: Average Income */}
         <div className="space-y-0.5">
-          <span className="text-xs text-[#7A8290] font-medium block">Average Income</span>
+          <span className="text-xs text-[#7A8290] font-semibold block">Avg Mandi Price Realization</span>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl sm:text-[28px] font-normal text-[#111315] tracking-tight">
-              $12,325.96
+            <span className="text-2xl font-bold text-[#111315]">
+              ₹ 2,425 / Qtl
             </span>
-            <span className="text-xs font-semibold text-[#10B981] flex items-center">
+            <span className="text-xs font-bold text-[#10B981] flex items-center">
               <ArrowUpRight size={13} strokeWidth={2.5} />
-              14%
+              +14% vs MSP
             </span>
           </div>
         </div>
 
-        {/* Right: Average Expenses */}
         <div className="space-y-0.5">
-          <span className="text-xs text-[#7A8290] font-medium block">Average Expenses</span>
+          <span className="text-xs text-[#7A8290] font-semibold block">Monthly Total Yield Unloaded</span>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl sm:text-[28px] font-normal text-[#111315] tracking-tight">
-              $8,146.96
+            <span className="text-2xl font-bold text-[#111315]">
+              320 Quintals
             </span>
-            <span className="text-xs font-semibold text-[#EF4444] flex items-center">
-              <ArrowDownRight size={13} strokeWidth={2.5} />
-              8%
+            <span className="text-xs font-bold text-[#059669]">
+              3 APMC Deliveries
             </span>
           </div>
         </div>

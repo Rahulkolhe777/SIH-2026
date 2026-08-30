@@ -412,7 +412,6 @@ export async function verifyOtp(
     where: {
       identifier: cleanId,
       codeHash,
-      type,
       consumedAt: null,
       expiresAt: { gt: new Date() },
     },
@@ -429,10 +428,15 @@ export async function verifyOtp(
     data: { consumedAt: new Date() },
   });
 
-  // Mark user as verified if email verification
-  if (type === OtpType.EMAIL_VERIFICATION) {
+  // Mark user as verified
+  if (isEmail) {
     await prisma.user.updateMany({
       where: { email: cleanId },
+      data: { isVerified: true },
+    });
+  } else {
+    await prisma.user.updateMany({
+      where: { phone: cleanId },
       data: { isVerified: true },
     });
   }

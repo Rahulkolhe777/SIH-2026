@@ -7,6 +7,7 @@ interface DashboardHeaderProps {
   userName?: string;
   avatarUrl?: string;
   onNavigateTab?: (tab: string) => void;
+  onOpenProfile?: () => void;
 }
 
 const navItems = ["Dashboard", "Transactions", "Analytics", "History"];
@@ -15,6 +16,7 @@ export const DashboardHeader = memo(function DashboardHeader({
   userName = "Jane",
   avatarUrl = "/images/avatar-1.jpg",
   onNavigateTab,
+  onOpenProfile,
 }: DashboardHeaderProps) {
   const dispatch = useAppDispatch();
   const authUser = useAppSelector((state) => state.auth.user);
@@ -169,7 +171,10 @@ export const DashboardHeader = memo(function DashboardHeader({
               <div className="py-1">
                 <button
                   type="button"
-                  onClick={() => setIsMenuOpen(false)}
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    if (onOpenProfile) onOpenProfile();
+                  }}
                   className="w-full px-4 py-2.5 text-left text-xs text-[#2C333E] hover:bg-[#F5F7F8] flex items-center gap-2.5 transition-colors cursor-pointer"
                 >
                   <User size={15} className="text-[#6C727F]" />
