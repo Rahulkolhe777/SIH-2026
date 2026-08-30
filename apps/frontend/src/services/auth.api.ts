@@ -1,3 +1,4 @@
+import { apiClient } from "./apiClient";
 import type {
   ApiResponse,
   AuthResponseData,
@@ -8,85 +9,49 @@ import type {
   VerifyOtpPayload,
 } from "../interfaces";
 
-const getApiBaseUrl = (): string => {
-  if (typeof window !== "undefined" && (window as any).__API_URL__) {
-    return (window as any).__API_URL__;
-  }
-  return "http://localhost:4000";
-};
+/**
+ * Register a new user using Axios
+ */
+export async function apiRegister(payload: RegisterPayload): Promise<ApiResponse<AuthResponseData>> {
+  const response = await apiClient.post<ApiResponse<AuthResponseData>>("/api/v1/auth/register", payload);
+  return response.data;
+}
 
 /**
- * Pure modular function to make standard API requests
+ * Log in with email/phone & password using Axios
  */
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
-  const baseUrl = getApiBaseUrl();
-  const token = typeof window !== "undefined" ? localStorage.getItem("mandi_access_token") : null;
-
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(options.headers as Record<string, string>),
-  };
-
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
-  try {
-    const response = await fetch(`${baseUrl}${endpoint}`, {
-      ...options,
-      headers,
-    });
-
-    const data = await response.json();
-    return data;
-  } catch (error: any) {
-    return {
-      success: false,
-      error: {
-        code: "NETWORK_ERROR",
-        message: error?.message || "Failed to communicate with server.",
-      },
-    };
-  }
-}
-
-export async function apiRegister(payload: RegisterPayload): Promise<ApiResponse<AuthResponseData>> {
-  return request<AuthResponseData>("/api/v1/auth/register", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
 export async function apiLogin(payload: LoginPayload): Promise<ApiResponse<AuthResponseData>> {
-  return request<AuthResponseData>("/api/v1/auth/login", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  const response = await apiClient.post<ApiResponse<AuthResponseData>>("/api/v1/auth/login", payload);
+  return response.data;
 }
 
+/**
+ * Send or resend 6-digit OTP code using Axios
+ */
 export async function apiSendOtp(payload: SendOtpPayload): Promise<ApiResponse<{ message: string; otp?: string }>> {
-  return request<{ message: string; otp?: string }>("/api/v1/auth/send-otp", {
-    method: "POST",
-    body: JSON.stringify({
-      identifier: payload.identifier,
-      type: payload.type || "EMAIL_VERIFICATION",
-    }),
+  const response = await apiClient.post<ApiResponse<{ message: string; otp?: string }>>("/api/v1/auth/send-otp", {
+    identifier: payload.identifier,
+    type: payload.type || "EMAIL_VERIFICATION",
   });
+  return response.data;
 }
 
+/**
+ * Verify 6-digit OTP code using Axios
+ */
 export async function apiVerifyOtp(payload: VerifyOtpPayload): Promise<ApiResponse<AuthResponseData>> {
-  return request<AuthResponseData>("/api/v1/auth/verify-otp", {
-    method: "POST",
-    body: JSON.stringify({
-      identifier: payload.identifier,
-      code: payload.code,
-      type: payload.type || "EMAIL_VERIFICATION",
-    }),
+  const response = await apiClient.post<ApiResponse<AuthResponseData>>("/api/v1/auth/verify-otp", {
+    identifier: payload.identifier,
+    code: payload.code,
+    type: payload.type || "EMAIL_VERIFICATION",
   });
+  return response.data;
 }
 
+/**
+ * Fetch currently authenticated user session using Axios
+ */
 export async function apiGetCurrentUser(): Promise<ApiResponse<{ user: User }>> {
-  return request<{ user: User }>("/api/v1/auth/me", {
-    method: "GET",
-  });
+  const response = await apiClient.get<ApiResponse<{ user: User }>>("/api/v1/auth/me");
+  return response.data;
 }
