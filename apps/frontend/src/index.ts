@@ -32,25 +32,30 @@ const server = serve({
     const url = new URL(req.url);
 
     // 1. Serve static media assets from public/
-    if (url.pathname.startsWith("/images/")) {
-      const imgPath = path.join(publicDir, url.pathname);
-      const imgFile = file(imgPath);
+    if (url.pathname.startsWith("/images/") || url.pathname.includes("/images/")) {
+      const imgFileName = path.basename(url.pathname);
+      const imgFile = file(path.join(publicDir, "images", imgFileName));
       if (await imgFile.exists()) {
         return new Response(imgFile);
       }
     }
 
-    // 2. Serve compiled dist chunks (.js, .css, .map, etc.)
-    const distFilePath = path.join(distDir, url.pathname);
-    const distFile = file(distFilePath);
-    if (url.pathname !== "/" && (await distFile.exists())) {
-      return new Response(distFile);
+    // 2. Serve compiled dist chunks (.js, .css, .map, etc.) by filename
+    const filename = path.basename(url.pathname);
+    if (filename.includes(".")) {
+      const distFile = file(path.join(distDir, filename));
+      if (await distFile.exists()) {
+        return new Response(distFile);
+      }
     }
 
-    // 3. SPA Fallback: Serve dist/index.html
+    // 3. SPA Fallback: Serve dist/index.html with absolute root paths replaced
     const indexHtml = file(path.join(distDir, "index.html"));
     if (await indexHtml.exists()) {
-      return new Response(indexHtml, {
+      let htmlText = await indexHtml.text();
+      // Ensure scripts and stylesheets use absolute root / paths instead of relative ./
+      htmlText = htmlText.replaceAll('href="./', 'href="/').replaceAll('src="./', 'src="/');
+      return new Response(htmlText, {
         headers: {
           "Content-Type": "text/html; charset=utf-8",
         },
