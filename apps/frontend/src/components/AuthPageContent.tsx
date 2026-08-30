@@ -16,6 +16,7 @@ import {
   Landmark,
   KeyRound,
   RotateCw,
+  LogIn,
 } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../store";
 import {
@@ -63,11 +64,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
     pendingOtpType,
   } = useAppSelector((state) => state.auth);
 
-  // If pendingIdentifier is already set in Redux, default to OTP_VERIFY
-  const [authMode, setAuthMode] = useState<AuthMode>(() => {
-    return pendingIdentifier ? "OTP_VERIFY" : initialMode;
-  });
-
+  const [authMode, setAuthMode] = useState<AuthMode>(initialMode);
   const [selectedRole, setSelectedRole] = useState<Role>("FARMER");
   const [loginMethod, setLoginMethod] = useState<LoginMethod>("PASSWORD");
 
@@ -109,7 +106,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
     }
   }, [isAuthenticated, onSuccess]);
 
-  // When pendingIdentifier is set in Redux, ALWAYS switch to OTP_VERIFY view
+  // When an unverified login triggers pendingIdentifier, switch to OTP_VERIFY view
   useEffect(() => {
     if (pendingIdentifier && authMode !== "OTP_VERIFY") {
       setAuthMode("OTP_VERIFY");
@@ -210,26 +207,24 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
     }
   };
 
-  const handleSendOtp = (e: React.FormEvent) => {
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!identifier.trim()) return;
 
-    // Immediately show OTP view and dispatch
-    dispatch(
-      setPendingVerification({
-        identifier: identifier.trim(),
-        type: "LOGIN_OTP",
-      })
-    );
-    setAuthMode("OTP_VERIFY");
-    setResendCountdown(60);
-
-    dispatch(
+    const result = await dispatch(
       sendOtpThunk({
         identifier: identifier.trim(),
         type: "LOGIN_OTP",
       })
     );
+
+    if (sendOtpThunk.fulfilled.match(result)) {
+      setAuthMode("OTP_VERIFY");
+      setResendCountdown(60);
+      setTimeout(() => {
+        inputRefs.current[0]?.focus();
+      }, 300);
+    }
   };
 
   const handleResendOtp = () => {
@@ -244,7 +239,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
     setResendCountdown(60);
   };
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     dispatch(clearAuthMessages());
 
@@ -252,13 +247,13 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
 
     if (loginMethod === "PASSWORD") {
       if (!password) return;
-      dispatch(loginUserThunk({ identifier: identifier.trim(), password }));
+      await dispatch(loginUserThunk({ identifier: identifier.trim(), password }));
     } else {
       handleSendOtp(e);
     }
   };
 
-  const handleRegisterSubmit = (e: React.FormEvent) => {
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     dispatch(clearAuthMessages());
 
@@ -267,22 +262,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
       return;
     }
 
-    // 1. Immediately transition to OTP_VERIFY so user is never thrown back to login
-    dispatch(
-      setPendingVerification({
-        identifier: targetEmail,
-        type: "EMAIL_VERIFICATION",
-      })
-    );
-    setAuthMode("OTP_VERIFY");
-    setResendCountdown(60);
-    setOtpDigits(["", "", "", "", "", ""]);
-    setTimeout(() => {
-      inputRefs.current[0]?.focus();
-    }, 300);
-
-    // 2. Dispatch backend registration
-    dispatch(
+    const result = await dispatch(
       registerUserThunk({
         name: fullName.trim(),
         email: targetEmail,
@@ -292,6 +272,16 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
         location: location.trim() || undefined,
       })
     );
+
+    // ONLY switch to OTP view if registration/OTP generation succeeded
+    if (registerUserThunk.fulfilled.match(result)) {
+      setAuthMode("OTP_VERIFY");
+      setResendCountdown(60);
+      setOtpDigits(["", "", "", "", "", ""]);
+      setTimeout(() => {
+        inputRefs.current[0]?.focus();
+      }, 300);
+    }
   };
 
   const handleVerifyOtpSubmit = (e: React.FormEvent) => {
@@ -490,9 +480,24 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
 
               {/* Status Alerts */}
               {error && (
-                <div className="mb-5 p-3.5 rounded-2xl text-xs font-medium border flex items-center gap-2 bg-red-500/20 border-red-500/30 text-red-200">
-                  <ShieldCheck className="w-4 h-4 shrink-0" />
-                  <span>{error}</span>
+                <div className="mb-5 p-3.5 rounded-2xl text-xs font-medium border flex items-center justify-between gap-2 bg-red-500/20 border-red-500/30 text-red-200">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                  {error.includes("already exists") && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIdentifier(regEmail || identifier);
+                        switchMode("LOGIN");
+                      }}
+                      className="px-2.5 py-1 bg-white/20 hover:bg-white/30 text-white rounded-lg text-[11px] font-semibold whitespace-nowrap cursor-pointer flex items-center gap-1"
+                    >
+                      <LogIn size={12} />
+                      <span>Sign In</span>
+                    </button>
+                  )}
                 </div>
               )}
               {successMessage && (
