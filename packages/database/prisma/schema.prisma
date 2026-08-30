@@ -64,6 +64,7 @@ model User {
   refreshTokens       RefreshToken[]
   otps                OtpVerification[]
   passwordResetTokens PasswordResetToken[]
+  farmerProfile       FarmerProfile?
 
   // Relations for Mandi & Farmer operations
   mandiProfile        MandiProfile?
@@ -72,6 +73,35 @@ model User {
   @@index([email])
   @@index([phone])
   @@index([role])
+}
+
+model FarmerProfile {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Detailed Address Fields
+  addressLine1    String?
+  addressLine2    String?
+  village         String?
+  taluka          String?
+  district        String?
+  state           String?
+  pincode         String?
+  
+  // Farm & Agriculture Details
+  landSizeAcres   Float?
+  mainCrops       String[]  @default([])
+  secondaryCrops  String[]  @default([])
+  irrigationType  String?   // e.g., Drip, Sprinkler, Well, Canal, Rainfed
+  farmLocation    String?   // GPS / Coordinates or Landmark
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([district, state])
+  @@index([pincode])
 }
 
 model RefreshToken {

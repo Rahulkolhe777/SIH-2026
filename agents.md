@@ -47,7 +47,8 @@ This repository contains the project source code, configuration, documentation, 
 ## Git
 
 * **Branch Workflow**: Do NOT directly modify or push to the `main` branch. Always work on feature branches named `userName/<module_name>` (e.g., `rupesh/auth`). Only push to that specific `userName/<module_name>` branch.
-* Keep commits focused when committing is requested.
+* **Always Commit on Feature Branches**: Whenever you complete or change a feature/task, always create a focused git commit on the current specific feature branch (never on `main`).
+* Keep commits focused, well-scoped, and documented with clear, descriptive commit messages.
 * Avoid modifying unrelated files.
 * Do not commit secrets, credentials, generated artifacts, or local environment files.
 
