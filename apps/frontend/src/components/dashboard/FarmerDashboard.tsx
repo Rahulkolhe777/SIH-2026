@@ -1,7 +1,6 @@
 import React, { useState, memo, useEffect } from "react";
 import { DashboardHeader } from "./DashboardHeader";
 import { WelcomeBanner } from "./WelcomeBanner";
-import { MandiKisanCard } from "./MandiKisanCard";
 import { TotalBalanceCard } from "./TotalBalanceCard";
 import { StatisticsChartCard } from "./StatisticsChartCard";
 import { RecentTransactionsCard } from "./RecentTransactionsCard";
@@ -60,20 +59,12 @@ export const FarmerDashboard = memo(function FarmerDashboard({
             
             {/* LEFT COLUMN (lg:col-span-6) */}
             <div className="lg:col-span-6 space-y-5 sm:space-y-6 flex flex-col">
-              {/* Top Row: Physical Kisan Card + Total Balance Card */}
-              <div className="flex flex-col sm:flex-row items-stretch gap-4 sm:gap-5">
-                <MandiKisanCard
-                  cardNumber1="**** 3765"
-                  cardNumber2="**** 4329"
-                  expiry="12/28"
-                  onAddCard={() => setIsProfileModalOpen(true)}
-                />
-                <TotalBalanceCard
-                  targetBalance={87325.96}
-                  onTransfer={() => setIsBookSlotModalOpen(true)}
-                  onRequest={() => setIsBookSlotModalOpen(true)}
-                />
-              </div>
+              {/* Top Row: Total Balance Card */}
+              <TotalBalanceCard
+                targetBalance={87325.96}
+                onTransfer={() => setIsBookSlotModalOpen(true)}
+                onRequest={() => setIsBookSlotModalOpen(true)}
+              />
 
               {/* Bottom Row: Recent Mandi Transactions */}
               <RecentTransactionsCard />
