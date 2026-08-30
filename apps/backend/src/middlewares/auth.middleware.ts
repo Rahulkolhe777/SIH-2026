@@ -1,13 +1,16 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyAccessToken } from "../utils/jwt.js";
-import { DecodedToken } from "../interfaces/index.js";
-import { prisma, Role } from "@repo/database";
+import { DecodedToken, MandiProfileDto } from "../interfaces/index.js";
+import { prisma } from "../lib/prisma.js";
+import { Role, MandiApprovalStatus } from "@prisma/client";
 
-// Extend Express Request interface to include user
+// Extend Express Request interface to include user and Mandi context
 declare global {
   namespace Express {
     interface Request {
       user?: DecodedToken & { id: string };
+      mandiProfile?: MandiProfileDto | null;
+      mandiApprovalStatus?: MandiApprovalStatus;
     }
   }
 }
@@ -107,4 +110,64 @@ export function requireVerified(req: Request, res: Response, next: NextFunction)
   }
 
   next();
+}
+
+/**
+ * Middleware to enforce that the authenticated Mandi has been approved by an Admin.
+ * Attaches req.mandiProfile and req.mandiApprovalStatus to the request.
+ */
+export async function requireApprovedMandi(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({
+      success: false,
+      message: "Authentication required.",
+      code: "UNAUTHORIZED",
+    });
+    return;
+  }
+
+  try {
+    const profile = await prisma.mandiProfile.findUnique({
+      where: { userId: req.user.userId },
+      include: { legalDocs: true },
+    });
+
+    if (!profile) {
+      res.status(403).json({
+        success: false,
+        message: "Access restricted. Mandi profile not yet initialized. Please complete onboarding.",
+        code: "MANDI_NOT_APPROVED",
+        data: {
+          approvalStatus: MandiApprovalStatus.PENDING_ONBOARDING,
+          requiresOnboarding: true,
+        },
+      });
+      return;
+    }
+
+    req.mandiProfile = profile;
+    req.mandiApprovalStatus = profile.approvalStatus;
+
+    if (profile.approvalStatus !== MandiApprovalStatus.APPROVED) {
+      res.status(403).json({
+        success: false,
+        message: `Access restricted. Your Mandi registration is currently ${profile.approvalStatus.toLowerCase().replace(/_/g, " ")}. Platform administrator approval is required.`,
+        code: "MANDI_NOT_APPROVED",
+        data: {
+          approvalStatus: profile.approvalStatus,
+          rejectionReason: profile.rejectionReason,
+          requiresOnboarding: profile.approvalStatus === MandiApprovalStatus.PENDING_ONBOARDING,
+        },
+      });
+      return;
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
 }
