@@ -279,40 +279,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
       <div className="absolute bottom-0 left-0 right-0 h-[600px] bg-gradient-to-t from-[#05160C] via-[#05160C]/80 to-transparent pointer-events-none z-10" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_40%,_rgba(5,22,12,0.6)_100%)] pointer-events-none z-10" />
 
-      {/* TOP: Minimal Brand Header */}
-      <div className="relative z-30 w-full pt-6 md:pt-8 px-6 sm:px-8 md:px-12 lg:px-16 flex items-center justify-between">
-        <a
-          href={typeof window !== "undefined" && (window as any).__LANDING_URL__ ? (window as any).__LANDING_URL__ : "http://localhost:3000"}
-          className="flex items-center gap-2.5 group cursor-pointer"
-          aria-label="Agrovia Home"
-        >
-          <div className="w-8 h-8 md:w-9 md:h-9 bg-[#C8F52F] rounded-lg flex items-center justify-center shadow-md group-hover:scale-105 transition-transform duration-200">
-            <svg
-              className="w-5 h-5 text-[#0B2D1B]"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M7 16h10" />
-              <path d="M9 12h10" />
-              <path d="M5 8h10" />
-            </svg>
-          </div>
-          <span className="text-white font-semibold text-xl tracking-tight">
-            Agrovia Mandi
-          </span>
-        </a>
 
-        <a
-          href={typeof window !== "undefined" && (window as any).__LANDING_URL__ ? (window as any).__LANDING_URL__ : "http://localhost:3000"}
-          className="text-xs sm:text-sm text-white/70 hover:text-white transition-colors bg-white/10 hover:bg-white/15 px-4 py-1.5 rounded-full border border-white/15 backdrop-blur-md"
-        >
-          ← Back to Home
-        </a>
-      </div>
 
       {/* CENTER: Main Container with Landing Typography & Stacked Glass Card */}
       <main className="relative z-20 w-full px-4 sm:px-6 md:px-12 lg:px-16 py-10 md:py-14 my-auto flex flex-col items-center">
