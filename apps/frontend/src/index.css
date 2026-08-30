@@ -1,20 +1,49 @@
 @import "tailwindcss";
 
-@layer base {
-  :root {
-    color-scheme: dark;
-    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-    --font-mono: 'JetBrains Mono', monospace;
-  }
+@theme {
+  --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-serif: 'Newsreader', Georgia, serif;
+  --color-agri-dark: #0B2D1B;
+  --color-agri-darker: #06180E;
+  --color-agri-lime: #C8F52F;
+  --color-agri-lime-hover: #b8e624;
+  --color-agri-warm: #FCFCFA;
+  --color-agri-surface: #F4F4F2;
+  --color-agri-gray: #5A6C5F;
+  --color-agri-gray-dark: #23382B;
+}
 
-  body {
-    background-color: #09090b;
-    color: #f4f4f5;
-    font-family: var(--font-sans);
-    margin: 0;
-    padding: 0;
-    min-height: 100vh;
+@keyframes bobbing {
+  0%, 100% {
+    transform: translateY(0px);
   }
+  50% {
+    transform: translateY(4px);
+  }
+}
+
+.animate-bobbing {
+  animation: bobbing 2s ease-in-out infinite;
+}
+
+::selection {
+  background-color: #C8F52F;
+  color: #0B2D1B;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #05160C;
+  color: #FFFFFF;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.font-editorial {
+  font-family: var(--font-serif);
+  font-style: italic;
 }
 
 /* Custom scrollbars */
@@ -24,14 +53,14 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #18181b;
+  background: #06180E;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: rgba(200, 245, 47, 0.25);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: rgba(200, 245, 47, 0.45);
 }

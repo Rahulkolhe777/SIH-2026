@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { Menu, X } from "lucide-react";
 
 interface NavbarProps {
@@ -79,14 +80,20 @@ export default function Navbar({ activeTab = "Home", onSelectTab }: NavbarProps)
           })}
         </nav>
 
-        {/* Right CTA Button */}
+        {/* Right CTA Buttons */}
         <div className="hidden md:flex items-center gap-3">
-          <button
-            onClick={() => handleTabClick("Book Slot")}
-            className="bg-white text-[#0B2D1B] font-semibold px-5 py-2.5 rounded-full text-sm shadow-md hover:scale-[1.03] active:scale-[0.98] transition-all duration-200 cursor-pointer"
+          <a
+            href={`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001"}/login`}
+            className="text-white/80 hover:text-white text-sm font-medium px-4 py-2 rounded-full hover:bg-white/10 transition-all duration-200"
+          >
+            Sign In
+          </a>
+          <a
+            href={`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001"}/register`}
+            className="bg-[#C8F52F] text-[#0B2D1B] font-semibold px-5 py-2.5 rounded-full text-sm shadow-md hover:bg-[#b8e624] hover:scale-[1.03] active:scale-[0.98] transition-all duration-200"
           >
             Book Slot
-          </button>
+          </a>
         </div>
 
         {/* Mobile Menu Button */}
@@ -117,13 +124,19 @@ export default function Navbar({ activeTab = "Home", onSelectTab }: NavbarProps)
               {item}
             </button>
           ))}
-          <div className="pt-2 border-t border-white/10">
-            <button
-              onClick={() => handleTabClick("Book Slot")}
-              className="w-full bg-white text-[#0B2D1B] font-semibold py-2.5 rounded-xl text-sm text-center"
+          <div className="pt-2 border-t border-white/10 flex flex-col gap-2">
+            <a
+              href={`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001"}/login`}
+              className="w-full text-center py-2.5 rounded-xl text-sm text-white/90 bg-white/10 font-medium"
             >
-              Book Slot
-            </button>
+              Sign In
+            </a>
+            <a
+              href={`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001"}/register`}
+              className="w-full bg-[#C8F52F] text-[#0B2D1B] font-semibold py-2.5 rounded-xl text-sm text-center shadow-md"
+            >
+              Book Slot / Register
+            </a>
           </div>
         </div>
       )}
