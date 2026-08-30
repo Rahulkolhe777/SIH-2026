@@ -11,6 +11,16 @@ vi.mock("../src/lib/prisma.js", () => {
     user: {
       findUnique: vi.fn(),
     },
+    mandiProfile: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
+    },
+    mandiSlot: {
+      findMany: vi.fn(),
+    },
+    booking: {
+      count: vi.fn(),
+    },
   };
   return {
     prisma: mockPrisma,
@@ -68,6 +78,19 @@ describe("Role-Based Access Control (RBAC) Suite", () => {
 
   describe("Protected Mandi Operator Endpoints (/api/v1/mandi/*)", () => {
     it("should allow MANDI_OPERATOR role to access mandi dashboard", async () => {
+      vi.mocked(prisma.mandiProfile.findUnique).mockResolvedValue({
+        id: "profile_1",
+        userId: "mandi-user-2",
+        mandiName: "Mandi Yard",
+        apmcCode: "APMC-001",
+        rating: 4.8,
+        totalReviews: 10,
+        approvalStatus: "APPROVED",
+        legalDocs: [],
+      } as any);
+      vi.mocked(prisma.mandiSlot.findMany).mockResolvedValue([]);
+      vi.mocked(prisma.booking.count).mockResolvedValue(0);
+
       const response = await request(app)
         .get("/api/v1/mandi/dashboard")
         .set("Authorization", `Bearer ${mandiToken}`);
