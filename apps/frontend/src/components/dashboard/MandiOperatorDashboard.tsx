@@ -68,7 +68,10 @@ export const MandiOperatorDashboard = memo(function MandiOperatorDashboard({
           </div>
 
           <button
-            onClick={() => dispatch(logout())}
+            onClick={() => {
+              dispatch(logout());
+              window.location.href = "/login";
+            }}
             className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition-colors cursor-pointer"
           >
             <LogOut size={14} />
