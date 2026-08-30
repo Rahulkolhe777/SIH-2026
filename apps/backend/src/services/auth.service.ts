@@ -23,16 +23,18 @@ import type {
  * Gracefully handles unverified re-registrations by updating credentials and issuing a fresh OTP.
  */
 export async function registerUser(data: RegisterInput) {
+  const normalizedEmail = data.email.toLowerCase().trim();
+
   // 1. Check if email already exists
   const existingEmail = await prisma.user.findUnique({
-    where: { email: data.email },
+    where: { email: normalizedEmail },
   });
 
   let user;
   const passwordHash = await hashPassword(data.password);
 
   if (existingEmail) {
-    // If account is already verified or in strict check, reject with 409
+    // If account is already verified, reject with 409
     if (existingEmail.isVerified !== false) {
       throw new AppError(
         "An account with this email address already exists.",
@@ -55,7 +57,7 @@ export async function registerUser(data: RegisterInput) {
     // Invalidate old unconsumed OTPs for this user
     await prisma.otpVerification.updateMany({
       where: {
-        identifier: data.email,
+        identifier: normalizedEmail,
         type: OtpType.EMAIL_VERIFICATION,
         consumedAt: null,
       },
@@ -65,7 +67,7 @@ export async function registerUser(data: RegisterInput) {
     // 2. Check if phone already exists
     if (data.phone) {
       const existingPhone = await prisma.user.findUnique({
-        where: { phone: data.phone },
+        where: { phone: data.phone.trim() },
       });
 
       if (existingPhone && existingPhone.isVerified !== false) {
@@ -81,8 +83,8 @@ export async function registerUser(data: RegisterInput) {
     user = await prisma.user.create({
       data: {
         name: data.name,
-        email: data.email,
-        phone: data.phone || null,
+        email: normalizedEmail,
+        phone: data.phone ? data.phone.trim() : null,
         passwordHash,
         role: data.role,
         isVerified: false,
@@ -97,7 +99,7 @@ export async function registerUser(data: RegisterInput) {
 
   await prisma.otpVerification.create({
     data: {
-      identifier: user.email,
+      identifier: normalizedEmail,
       userId: user.id,
       codeHash: otpHash,
       type: OtpType.EMAIL_VERIFICATION,
@@ -106,7 +108,7 @@ export async function registerUser(data: RegisterInput) {
   });
 
   // Dispatch verification email in background
-  sendVerificationOtpEmail(user.email, user.name, otp).catch((err) => {
+  sendVerificationOtpEmail(normalizedEmail, user.name, otp).catch((err) => {
     console.error("Failed to send verification email:", err);
   });
 
@@ -154,13 +156,14 @@ export async function registerUser(data: RegisterInput) {
  */
 export async function loginUser(data: LoginInput) {
   const isEmail = data.identifier.includes("@");
+  const normalizedIdentifier = isEmail ? data.identifier.toLowerCase().trim() : data.identifier.trim();
 
   const user = isEmail
     ? await prisma.user.findUnique({
-        where: { email: data.identifier.toLowerCase().trim() },
+        where: { email: normalizedIdentifier },
       })
     : await prisma.user.findUnique({
-        where: { phone: data.identifier.trim() },
+        where: { phone: normalizedIdentifier },
       });
 
   if (!user) {
@@ -345,18 +348,20 @@ export async function logoutUser(refreshTokenRaw?: string) {
  */
 export async function sendOtp(identifier: string, type: OtpType) {
   const isEmail = identifier.includes("@");
+  const cleanId = isEmail ? identifier.toLowerCase().trim() : identifier.trim();
+
   const user = isEmail
     ? await prisma.user.findUnique({
-        where: { email: identifier.toLowerCase().trim() },
+        where: { email: cleanId },
       })
     : await prisma.user.findUnique({
-        where: { phone: identifier.trim() },
+        where: { phone: cleanId },
       });
 
   // Invalidate previous unconsumed OTPs
   await prisma.otpVerification.updateMany({
     where: {
-      identifier,
+      identifier: cleanId,
       type,
       consumedAt: null,
     },
@@ -369,7 +374,7 @@ export async function sendOtp(identifier: string, type: OtpType) {
 
   await prisma.otpVerification.create({
     data: {
-      identifier,
+      identifier: cleanId,
       userId: user?.id || null,
       codeHash: otpHash,
       type,
@@ -392,18 +397,20 @@ export async function sendOtp(identifier: string, type: OtpType) {
 }
 
 /**
- * Validates and consumes OTP code.
+ * Validates and consumes OTP code, marks account verified, and returns active session.
  */
 export async function verifyOtp(
   identifier: string,
   code: string,
   type: OtpType
 ) {
-  const codeHash = hashOtp(code);
+  const isEmail = identifier.includes("@");
+  const cleanId = isEmail ? identifier.toLowerCase().trim() : identifier.trim();
+  const codeHash = hashOtp(code.trim());
 
   const otpRecord = await prisma.otpVerification.findFirst({
     where: {
-      identifier,
+      identifier: cleanId,
       codeHash,
       type,
       consumedAt: null,
@@ -425,9 +432,58 @@ export async function verifyOtp(
   // Mark user as verified if email verification
   if (type === OtpType.EMAIL_VERIFICATION) {
     await prisma.user.updateMany({
-      where: { email: identifier },
+      where: { email: cleanId },
       data: { isVerified: true },
     });
+  }
+
+  // Fetch full user record to issue active session tokens
+  let user = null;
+  if (otpRecord.userId) {
+    user = await prisma.user.findUnique({
+      where: { id: otpRecord.userId },
+    });
+  } else {
+    user = isEmail
+      ? await prisma.user.findUnique({ where: { email: cleanId } })
+      : await prisma.user.findUnique({ where: { phone: cleanId } });
+  }
+
+  if (user) {
+    const accessToken = generateAccessToken({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      isVerified: true,
+    });
+
+    const refreshTokenRaw = generateRefreshTokenString();
+    const refreshTokenHash = hashToken(refreshTokenRaw);
+    const refreshExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    await prisma.refreshToken.create({
+      data: {
+        tokenHash: refreshTokenHash,
+        userId: user.id,
+        expiresAt: refreshExpiresAt,
+      },
+    });
+
+    return {
+      isVerified: true,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        isVerified: true,
+        createdAt: user.createdAt,
+      },
+      accessToken,
+      refreshToken: refreshTokenRaw,
+      message: "Account verified successfully.",
+    };
   }
 
   return {
@@ -440,8 +496,9 @@ export async function verifyOtp(
  * Initiates forgot password flow by generating token and OTP.
  */
 export async function forgotPassword(email: string) {
+  const cleanEmail = email.toLowerCase().trim();
   const user = await prisma.user.findUnique({
-    where: { email: email.toLowerCase().trim() },
+    where: { email: cleanEmail },
   });
 
   if (!user) {
@@ -469,7 +526,7 @@ export async function forgotPassword(email: string) {
 
   await prisma.otpVerification.create({
     data: {
-      identifier: user.email,
+      identifier: cleanEmail,
       userId: user.id,
       codeHash: otpHash,
       type: OtpType.PASSWORD_RESET,
@@ -491,8 +548,9 @@ export async function forgotPassword(email: string) {
  * Resets user password using reset token or OTP code.
  */
 export async function resetPassword(data: ResetPasswordInput) {
+  const cleanEmail = data.email.toLowerCase().trim();
   const user = await prisma.user.findUnique({
-    where: { email: data.email.toLowerCase().trim() },
+    where: { email: cleanEmail },
   });
 
   if (!user) {
@@ -523,7 +581,7 @@ export async function resetPassword(data: ResetPasswordInput) {
     const otpHash = hashOtp(data.token);
     const otpRecord = await prisma.otpVerification.findFirst({
       where: {
-        identifier: user.email,
+        identifier: cleanEmail,
         codeHash: otpHash,
         type: OtpType.PASSWORD_RESET,
         consumedAt: null,

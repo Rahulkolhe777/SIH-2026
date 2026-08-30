@@ -88,6 +88,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
   const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [resendCountdown, setResendCountdown] = useState(60);
+  const isSubmittingRef = useRef(false);
 
   const [scrollY, setScrollY] = useState(0);
 
@@ -103,7 +104,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
       const timer = setTimeout(() => {
         if (onSuccess) onSuccess();
         else window.location.href = "/farmer/dashboard";
-      }, 700);
+      }, 500);
       return () => clearTimeout(timer);
     }
   }, [isAuthenticated, onSuccess]);
@@ -140,12 +141,37 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
     }
   };
 
+  // Safe single-flight OTP submit
+  const triggerOtpVerification = async (code: string) => {
+    if (isSubmittingRef.current || code.length < 6) return;
+    isSubmittingRef.current = true;
+
+    const activeId = pendingIdentifier || identifier.trim() || regEmail.trim();
+    try {
+      await dispatch(
+        verifyOtpThunk({
+          identifier: activeId,
+          code,
+          type: pendingOtpType || "EMAIL_VERIFICATION",
+        })
+      ).unwrap();
+    } catch (err) {
+      console.error("OTP verification error:", err);
+    } finally {
+      isSubmittingRef.current = false;
+    }
+  };
+
   // Handle individual OTP digit typing and auto-focus
   const handleOtpChange = (index: number, val: string) => {
     const cleanVal = val.replace(/\D/g, "").slice(-1);
     const newDigits = [...otpDigits];
     newDigits[index] = cleanVal;
     setOtpDigits(newDigits);
+
+    if (error) {
+      dispatch(clearAuthMessages());
+    }
 
     // Auto-advance to next box
     if (cleanVal && index < 5) {
@@ -155,14 +181,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
     // Auto-submit when all 6 digits filled
     const fullCode = newDigits.join("");
     if (fullCode.length === 6 && !newDigits.includes("")) {
-      const activeId = pendingIdentifier || identifier.trim() || regEmail.trim();
-      dispatch(
-        verifyOtpThunk({
-          identifier: activeId,
-          code: fullCode,
-          type: pendingOtpType || "EMAIL_VERIFICATION",
-        })
-      );
+      triggerOtpVerification(fullCode);
     }
   };
 
@@ -185,14 +204,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
 
     if (pasted.length === 6) {
       inputRefs.current[5]?.focus();
-      const activeId = pendingIdentifier || identifier.trim() || regEmail.trim();
-      dispatch(
-        verifyOtpThunk({
-          identifier: activeId,
-          code: pasted,
-          type: pendingOtpType || "EMAIL_VERIFICATION",
-        })
-      );
+      triggerOtpVerification(pasted);
     } else {
       inputRefs.current[pasted.length]?.focus();
     }
@@ -286,15 +298,7 @@ export function AuthPageContent({ initialMode = "LOGIN", onSuccess }: AuthProps)
     e.preventDefault();
     const code = otpDigits.join("");
     if (code.length < 6) return;
-
-    const activeId = pendingIdentifier || identifier.trim() || regEmail.trim();
-    dispatch(
-      verifyOtpThunk({
-        identifier: activeId,
-        code,
-        type: pendingOtpType || "EMAIL_VERIFICATION",
-      })
-    );
+    triggerOtpVerification(code);
   };
 
   const activeDisplayId = pendingIdentifier || identifier.trim() || regEmail.trim();

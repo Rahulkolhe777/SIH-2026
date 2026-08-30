@@ -76,7 +76,7 @@ export const loginUserThunk = createAsyncThunk(
         return rejectWithValue({
           code: "ACCOUNT_NOT_VERIFIED",
           identifier: payload.identifier,
-          message: "Account not verified yet. We've opened the OTP verification screen.",
+          message: "Account not verified yet. A fresh OTP has been dispatched to your email.",
         });
       }
       return rejectWithValue(
@@ -242,22 +242,26 @@ export const authSlice = createSlice({
       })
       .addCase(verifyOtpThunk.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.user = action.payload.user;
-        state.accessToken = action.payload.accessToken;
-        state.isAuthenticated = true;
+        if (action.payload.user) {
+          state.user = action.payload.user;
+          state.accessToken = action.payload.accessToken || null;
+          state.isAuthenticated = true;
+          try {
+            localStorage.setItem("mandi_current_user", JSON.stringify(action.payload.user));
+            if (action.payload.accessToken) {
+              localStorage.setItem("mandi_access_token", action.payload.accessToken);
+            }
+          } catch (e) {
+            console.error(e);
+          }
+        }
         state.pendingIdentifier = null;
         state.otpSent = false;
-        state.successMessage = `Account verified! Welcome, ${action.payload.user.name}!`;
-        try {
-          localStorage.setItem("mandi_current_user", JSON.stringify(action.payload.user));
-          localStorage.setItem("mandi_access_token", action.payload.accessToken);
-        } catch (e) {
-          console.error(e);
-        }
+        state.successMessage = action.payload.message || "Account verified successfully!";
       })
       .addCase(verifyOtpThunk.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = (action.payload as string) || "Invalid OTP code.";
+        state.error = (action.payload as string) || "Invalid or expired OTP code.";
       });
 
     // Fetch Current User
