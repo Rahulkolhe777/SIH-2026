@@ -14,6 +14,8 @@ import {
   RotateCw,
   LogIn,
   AlertCircle,
+  HelpCircle,
+  ShieldCheck,
 } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../store";
 import {
@@ -22,11 +24,14 @@ import {
   registerUserThunk,
   sendOtpThunk,
   verifyOtpThunk,
+  forgotPasswordThunk,
+  resetPasswordThunk,
   clearPendingVerification,
 } from "../store/slices/authSlice";
 import type { Role } from "../interfaces";
 
-type AuthMode = "LOGIN" | "REGISTER" | "OTP_VERIFY";
+type AuthMode = "LOGIN" | "REGISTER" | "OTP_VERIFY" | "FORGOT_PASSWORD" | "RESET_PASSWORD";
+type LoginMethod = "PASSWORD" | "OTP";
 
 interface AuthProps {
   initialMode?: "LOGIN" | "REGISTER";
@@ -64,6 +69,7 @@ export const AuthPageContent = memo(function AuthPageContent({
   } = useAppSelector((state) => state.auth);
 
   const [authMode, setAuthMode] = useState<AuthMode>(initialMode);
+  const [loginMethod, setLoginMethod] = useState<LoginMethod>("PASSWORD");
   const [selectedRole, setSelectedRole] = useState<Role>("FARMER");
 
   // Login Form
@@ -77,6 +83,13 @@ export const AuthPageContent = memo(function AuthPageContent({
   const [regPhone, setRegPhone] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [showRegPassword, setShowRegPassword] = useState(false);
+
+  // Forgot / Reset Password Form
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [resetValidationMsg, setResetValidationMsg] = useState<string | null>(null);
 
   // 6-digit OTP Box Inputs
   const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
@@ -101,18 +114,18 @@ export const AuthPageContent = memo(function AuthPageContent({
 
   // When an unverified login triggers pendingIdentifier, switch to OTP_VERIFY view
   useEffect(() => {
-    if (pendingIdentifier && authMode !== "OTP_VERIFY") {
-      setAuthMode("OTP_VERIFY");
+    if (pendingIdentifier && authMode !== "OTP_VERIFY" && authMode !== "RESET_PASSWORD") {
+      setAuthMode(pendingOtpType === "PASSWORD_RESET" ? "RESET_PASSWORD" : "OTP_VERIFY");
       setResendCountdown(60);
       setTimeout(() => {
         inputRefs.current[0]?.focus();
       }, 200);
     }
-  }, [pendingIdentifier, authMode]);
+  }, [pendingIdentifier, authMode, pendingOtpType]);
 
   // Countdown timer for OTP resend
   useEffect(() => {
-    if (authMode !== "OTP_VERIFY" || resendCountdown <= 0) return;
+    if ((authMode !== "OTP_VERIFY" && authMode !== "RESET_PASSWORD") || resendCountdown <= 0) return;
     const interval = setInterval(() => {
       setResendCountdown((prev) => prev - 1);
     }, 1000);
@@ -122,6 +135,7 @@ export const AuthPageContent = memo(function AuthPageContent({
   const switchMode = (mode: AuthMode) => {
     setAuthMode(mode);
     dispatch(clearAuthMessages());
+    setResetValidationMsg(null);
     if (mode === "LOGIN") {
       dispatch(clearPendingVerification());
       window.history.pushState({}, "", "/login");
@@ -131,7 +145,7 @@ export const AuthPageContent = memo(function AuthPageContent({
     }
   };
 
-  // Safe single-flight OTP submit
+  // Safe single-flight OTP submit for normal verification / OTP login
   const triggerOtpVerification = async (code: string) => {
     if (isSubmittingRef.current || code.length < 6) return;
     isSubmittingRef.current = true;
@@ -168,9 +182,9 @@ export const AuthPageContent = memo(function AuthPageContent({
       inputRefs.current[index + 1]?.focus();
     }
 
-    // Auto-submit when all 6 digits filled
+    // Auto-submit when in normal OTP_VERIFY mode and all 6 digits filled
     const fullCode = newDigits.join("");
-    if (fullCode.length === 6 && !newDigits.includes("")) {
+    if (authMode === "OTP_VERIFY" && fullCode.length === 6 && !newDigits.includes("")) {
       triggerOtpVerification(fullCode);
     }
   };
@@ -194,32 +208,56 @@ export const AuthPageContent = memo(function AuthPageContent({
 
     if (pasted.length === 6) {
       inputRefs.current[5]?.focus();
-      triggerOtpVerification(pasted);
+      if (authMode === "OTP_VERIFY") {
+        triggerOtpVerification(pasted);
+      }
     } else {
       inputRefs.current[pasted.length]?.focus();
     }
   };
 
   const handleResendOtp = () => {
-    const activeId = pendingIdentifier || identifier.trim() || regEmail.trim();
+    const activeId = pendingIdentifier || identifier.trim() || regEmail.trim() || forgotEmail.trim();
     if (!activeId) return;
     dispatch(
       sendOtpThunk({
         identifier: activeId,
-        type: pendingOtpType || "EMAIL_VERIFICATION",
+        type: pendingOtpType || (authMode === "RESET_PASSWORD" ? "PASSWORD_RESET" : "EMAIL_VERIFICATION"),
       })
     );
     setResendCountdown(60);
   };
 
+  // Submit Password or OTP-based Login
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     dispatch(clearAuthMessages());
 
-    if (!identifier.trim() || !password) return;
-    await dispatch(loginUserThunk({ identifier: identifier.trim(), password }));
+    if (!identifier.trim()) return;
+
+    if (loginMethod === "PASSWORD") {
+      if (!password) return;
+      await dispatch(loginUserThunk({ identifier: identifier.trim(), password }));
+    } else {
+      // OTP Login Flow
+      const result = await dispatch(
+        sendOtpThunk({
+          identifier: identifier.trim(),
+          type: "LOGIN_OTP",
+        })
+      );
+      if (sendOtpThunk.fulfilled.match(result)) {
+        setAuthMode("OTP_VERIFY");
+        setResendCountdown(60);
+        setOtpDigits(["", "", "", "", "", ""]);
+        setTimeout(() => {
+          inputRefs.current[0]?.focus();
+        }, 200);
+      }
+    }
   };
 
+  // Submit Registration
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     dispatch(clearAuthMessages());
@@ -250,6 +288,64 @@ export const AuthPageContent = memo(function AuthPageContent({
     }
   };
 
+  // Submit Forgot Password request (Email -> Send OTP)
+  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    dispatch(clearAuthMessages());
+
+    const email = forgotEmail.trim();
+    if (!email) return;
+
+    const result = await dispatch(forgotPasswordThunk({ email }));
+    if (forgotPasswordThunk.fulfilled.match(result)) {
+      setAuthMode("RESET_PASSWORD");
+      setResendCountdown(60);
+      setOtpDigits(["", "", "", "", "", ""]);
+      setTimeout(() => {
+        inputRefs.current[0]?.focus();
+      }, 200);
+    }
+  };
+
+  // Submit Reset Password (OTP + New Password)
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    dispatch(clearAuthMessages());
+    setResetValidationMsg(null);
+
+    const otpCode = otpDigits.join("");
+    if (otpCode.length < 6) {
+      setResetValidationMsg("Please enter the complete 6-digit OTP code.");
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setResetValidationMsg("New password must be at least 8 characters.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setResetValidationMsg("Passwords do not match. Please re-enter.");
+      return;
+    }
+
+    const targetEmail = pendingIdentifier || forgotEmail.trim();
+    const result = await dispatch(
+      resetPasswordThunk({
+        email: targetEmail,
+        token: otpCode,
+        newPassword,
+      })
+    );
+
+    if (resetPasswordThunk.fulfilled.match(result)) {
+      setIdentifier(targetEmail);
+      setPassword("");
+      setAuthMode("LOGIN");
+      setLoginMethod("PASSWORD");
+    }
+  };
+
   const handleVerifyOtpSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const code = otpDigits.join("");
@@ -257,7 +353,7 @@ export const AuthPageContent = memo(function AuthPageContent({
     triggerOtpVerification(code);
   };
 
-  const activeDisplayId = pendingIdentifier || identifier.trim() || regEmail.trim();
+  const activeDisplayId = pendingIdentifier || identifier.trim() || regEmail.trim() || forgotEmail.trim();
 
   const isEmailError = errorCode === "USER_NOT_FOUND";
   const isPasswordError = errorCode === "INCORRECT_PASSWORD";
@@ -312,6 +408,13 @@ export const AuthPageContent = memo(function AuthPageContent({
                     Passcode.
                   </span>
                 </>
+              ) : authMode === "FORGOT_PASSWORD" || authMode === "RESET_PASSWORD" ? (
+                <>
+                  Recover Account <br />
+                  <span className="font-editorial italic font-normal text-[#10B981]">
+                    Credentials.
+                  </span>
+                </>
               ) : authMode === "LOGIN" ? (
                 <>
                   Access Your <br />
@@ -332,6 +435,10 @@ export const AuthPageContent = memo(function AuthPageContent({
             <p className="text-[#5A6C5F] text-sm sm:text-base leading-relaxed max-w-md">
               {authMode === "OTP_VERIFY"
                 ? `Enter the 6-digit verification code dispatched to ${activeDisplayId || "your contact"}. Immediate access upon verification.`
+                : authMode === "FORGOT_PASSWORD"
+                ? "Enter your registered email address and we'll dispatch a 6-digit security reset code instantly."
+                : authMode === "RESET_PASSWORD"
+                ? `Enter the 6-digit reset code sent to ${activeDisplayId || "your email"} along with your new password.`
                 : authMode === "LOGIN"
                 ? "Sign in to book real-time unloading slots, track gate entry QR tokens, and access guaranteed MSP rates."
                 : "Create an account in 2 minutes to eliminate yard wait times and receive direct bank settlements."}
@@ -365,8 +472,8 @@ export const AuthPageContent = memo(function AuthPageContent({
             <div className="bg-white border border-[#E8EAEC] rounded-[32px] p-6 sm:p-8 md:p-9 shadow-xl shadow-slate-200/50 relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#0B2D1B] via-[#C8F52F] to-[#10B981]" />
 
-              {/* Mode Switcher Tabs */}
-              {authMode !== "OTP_VERIFY" ? (
+              {/* Mode Switcher Tabs (Only on Login & Register) */}
+              {authMode === "LOGIN" || authMode === "REGISTER" ? (
                 <div className="flex p-1 bg-[#F4F4F2] border border-[#E8EAEC] rounded-full mb-6">
                   <button
                     type="button"
@@ -392,25 +499,29 @@ export const AuthPageContent = memo(function AuthPageContent({
                   </button>
                 </div>
               ) : (
-                /* Back to Register / Login header on OTP Screen */
+                /* Back Navigation for Sub-Flows */
                 <div className="flex items-center justify-between mb-6 pb-3 border-b border-[#F1F3F5]">
                   <button
                     type="button"
-                    onClick={() => switchMode("REGISTER")}
+                    onClick={() => switchMode("LOGIN")}
                     className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#5A6C5F] hover:text-[#0B2D1B] transition-colors cursor-pointer"
                   >
                     <ArrowLeft size={14} />
-                    <span>Back to Details</span>
+                    <span>Back to Sign In</span>
                   </button>
                   <span className="text-xs text-[#059669] font-bold flex items-center gap-1">
                     <KeyRound size={13} />
-                    OTP Verification
+                    {authMode === "FORGOT_PASSWORD"
+                      ? "Password Recovery"
+                      : authMode === "RESET_PASSWORD"
+                      ? "Reset Credentials"
+                      : "OTP Verification"}
                   </span>
                 </div>
               )}
 
               {/* Role Selection Matrix (Only on Register / Login) */}
-              {authMode !== "OTP_VERIFY" && (
+              {(authMode === "LOGIN" || authMode === "REGISTER") && (
                 <div className="mb-6 space-y-2 text-left">
                   <label className="text-[11px] font-bold text-[#5A6C5F] uppercase tracking-wider block">
                     Select User Type
@@ -455,11 +566,11 @@ export const AuthPageContent = memo(function AuthPageContent({
               )}
 
               {/* Error Alert Box */}
-              {error && (
+              {(error || resetValidationMsg) && (
                 <div className="mb-5 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-start gap-2.5 text-left animate-fadeIn">
                   <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <span className="font-semibold">{error}</span>
+                    <span className="font-semibold">{resetValidationMsg || error}</span>
                   </div>
                 </div>
               )}
@@ -477,6 +588,35 @@ export const AuthPageContent = memo(function AuthPageContent({
               {/* ======================= MODE 1: LOGIN ======================= */}
               {authMode === "LOGIN" && (
                 <form onSubmit={handleLoginSubmit} className="space-y-4 text-left">
+                  {/* Login Method Toggle: Password vs OTP */}
+                  <div className="flex items-center justify-between pb-1 border-b border-[#F1F3F5]">
+                    <span className="text-xs text-[#5A6C5F] font-semibold">Sign In Method</span>
+                    <div className="flex gap-1 p-0.5 bg-[#F4F4F2] rounded-lg border border-[#E2E5E9]">
+                      <button
+                        type="button"
+                        onClick={() => setLoginMethod("PASSWORD")}
+                        className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all cursor-pointer ${
+                          loginMethod === "PASSWORD"
+                            ? "bg-white text-[#0B2D1B] shadow-xs"
+                            : "text-[#5A6C5F] hover:text-[#0B2D1B]"
+                        }`}
+                      >
+                        Password
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLoginMethod("OTP")}
+                        className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all cursor-pointer ${
+                          loginMethod === "OTP"
+                            ? "bg-[#0B2D1B] text-white shadow-xs"
+                            : "text-[#5A6C5F] hover:text-[#0B2D1B]"
+                        }`}
+                      >
+                        Login with OTP
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Email / Identifier */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-[#0B2D1B] flex items-center justify-between">
@@ -505,40 +645,51 @@ export const AuthPageContent = memo(function AuthPageContent({
                     </div>
                   </div>
 
-                  {/* Password */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-[#0B2D1B] flex items-center justify-between">
-                      <span>Password</span>
-                      {isPasswordError && (
-                        <span className="text-[11px] font-bold text-rose-600">Incorrect password</span>
-                      )}
-                    </label>
-                    <div className="relative">
-                      <Lock size={16} className="absolute left-3.5 top-3.5 text-[#8A92A0]" />
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        required
-                        value={password}
-                        onChange={(e) => {
-                          setPassword(e.target.value);
-                          if (error) dispatch(clearAuthMessages());
-                        }}
-                        placeholder="••••••••"
-                        className={`w-full pl-10 pr-11 py-3 bg-[#F8F9FA] rounded-xl text-sm text-[#0B2D1B] placeholder:text-[#8A92A0] focus:outline-none transition-all ${
-                          isPasswordError
-                            ? "border-2 border-rose-500 bg-rose-50/30"
-                            : "border border-[#E2E5E9] focus:border-[#0B2D1B] focus:bg-white"
-                        }`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3.5 top-3.5 text-[#8A92A0] hover:text-[#0B2D1B] cursor-pointer"
-                      >
-                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
+                  {/* Password (Only if loginMethod === 'PASSWORD') */}
+                  {loginMethod === "PASSWORD" && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-[#0B2D1B]">
+                          <span>Password</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setForgotEmail(identifier.includes("@") ? identifier : "");
+                            switchMode("FORGOT_PASSWORD");
+                          }}
+                          className="text-[11px] font-semibold text-[#059669] hover:underline cursor-pointer"
+                        >
+                          Forgot password?
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <Lock size={16} className="absolute left-3.5 top-3.5 text-[#8A92A0]" />
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          required
+                          value={password}
+                          onChange={(e) => {
+                            setPassword(e.target.value);
+                            if (error) dispatch(clearAuthMessages());
+                          }}
+                          placeholder="••••••••"
+                          className={`w-full pl-10 pr-11 py-3 bg-[#F8F9FA] rounded-xl text-sm text-[#0B2D1B] placeholder:text-[#8A92A0] focus:outline-none transition-all ${
+                            isPasswordError
+                              ? "border-2 border-rose-500 bg-rose-50/30"
+                              : "border border-[#E2E5E9] focus:border-[#0B2D1B] focus:bg-white"
+                          }`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3.5 top-3.5 text-[#8A92A0] hover:text-[#0B2D1B] cursor-pointer"
+                        >
+                          {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Submit Button */}
                   <button
@@ -548,10 +699,15 @@ export const AuthPageContent = memo(function AuthPageContent({
                   >
                     {isLoading ? (
                       <RotateCw size={16} className="animate-spin text-[#C8F52F]" />
-                    ) : (
+                    ) : loginMethod === "PASSWORD" ? (
                       <>
                         <LogIn size={16} className="text-[#C8F52F]" />
                         <span>Sign In to Dashboard</span>
+                      </>
+                    ) : (
+                      <>
+                        <KeyRound size={16} className="text-[#C8F52F]" />
+                        <span>Get Instant Login OTP</span>
                       </>
                     )}
                   </button>
@@ -672,7 +828,171 @@ export const AuthPageContent = memo(function AuthPageContent({
                 </form>
               )}
 
-              {/* ======================= MODE 3: OTP VERIFY ======================= */}
+              {/* ======================= MODE 3: FORGOT PASSWORD ======================= */}
+              {authMode === "FORGOT_PASSWORD" && (
+                <form onSubmit={handleForgotPasswordSubmit} className="space-y-4 text-left">
+                  <div className="space-y-1 text-center mb-2">
+                    <h2 className="text-lg font-bold text-[#0B2D1B]">Forgot Your Password?</h2>
+                    <p className="text-xs text-[#5A6C5F]">
+                      Enter your account email and we'll send a 6-digit recovery OTP code.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-[#0B2D1B]">Email Address</label>
+                    <div className="relative">
+                      <Mail size={16} className="absolute left-3.5 top-3.5 text-[#8A92A0]" />
+                      <input
+                        type="email"
+                        required
+                        value={forgotEmail}
+                        onChange={(e) => setForgotEmail(e.target.value)}
+                        placeholder="your.email@agrovia.in"
+                        className="w-full pl-10 pr-4 py-3 bg-[#F8F9FA] border border-[#E2E5E9] focus:border-[#0B2D1B] focus:bg-white rounded-xl text-sm text-[#0B2D1B] placeholder:text-[#8A92A0] focus:outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full mt-2 py-3.5 rounded-2xl bg-[#0B2D1B] hover:bg-[#06180E] text-white font-bold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isLoading ? (
+                      <RotateCw size={16} className="animate-spin text-[#C8F52F]" />
+                    ) : (
+                      <>
+                        <KeyRound size={16} className="text-[#C8F52F]" />
+                        <span>Send Password Reset Code</span>
+                      </>
+                    )}
+                  </button>
+
+                  <div className="pt-2 text-center text-xs text-[#5A6C5F]">
+                    Remembered your password?{" "}
+                    <button
+                      type="button"
+                      onClick={() => switchMode("LOGIN")}
+                      className="font-bold text-[#0B2D1B] hover:underline cursor-pointer"
+                    >
+                      Sign In
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* ======================= MODE 4: RESET PASSWORD ======================= */}
+              {authMode === "RESET_PASSWORD" && (
+                <form onSubmit={handleResetPasswordSubmit} className="space-y-4 text-left">
+                  <div className="space-y-1 text-center mb-1">
+                    <h2 className="text-lg font-bold text-[#0B2D1B]">Set New Password</h2>
+                    <p className="text-xs text-[#5A6C5F]">
+                      Enter the 6-digit code sent to <strong className="text-[#0B2D1B]">{activeDisplayId}</strong> and create a new password.
+                    </p>
+                  </div>
+
+                  {/* 6 Digit Inputs */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-[#0B2D1B] block text-center">
+                      6-Digit Security Reset Code
+                    </label>
+                    <div className="flex items-center justify-center gap-2 sm:gap-2.5 my-2">
+                      {otpDigits.map((digit, index) => (
+                        <input
+                          key={index}
+                          ref={(el) => {
+                            inputRefs.current[index] = el;
+                          }}
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={1}
+                          value={digit}
+                          onChange={(e) => handleOtpChange(index, e.target.value)}
+                          onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                          onPaste={handleOtpPaste}
+                          className="w-10 h-12 sm:w-11 sm:h-13 text-center text-lg font-bold bg-[#F8F9FA] border border-[#D5D9DF] focus:border-[#0B2D1B] focus:bg-white rounded-xl text-[#0B2D1B] focus:outline-none transition-all shadow-xs"
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* New Password */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-[#0B2D1B]">New Password</label>
+                    <div className="relative">
+                      <Lock size={16} className="absolute left-3.5 top-3.5 text-[#8A92A0]" />
+                      <input
+                        type={showNewPassword ? "text" : "password"}
+                        required
+                        minLength={8}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="Minimum 8 characters"
+                        className="w-full pl-10 pr-11 py-2.5 bg-[#F8F9FA] border border-[#E2E5E9] focus:border-[#0B2D1B] focus:bg-white rounded-xl text-sm text-[#0B2D1B] placeholder:text-[#8A92A0] focus:outline-none transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="absolute right-3.5 top-3.5 text-[#8A92A0] hover:text-[#0B2D1B] cursor-pointer"
+                      >
+                        {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Confirm Password */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-[#0B2D1B]">Confirm New Password</label>
+                    <div className="relative">
+                      <Lock size={16} className="absolute left-3.5 top-3.5 text-[#8A92A0]" />
+                      <input
+                        type="password"
+                        required
+                        minLength={8}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Re-enter new password"
+                        className="w-full pl-10 pr-4 py-2.5 bg-[#F8F9FA] border border-[#E2E5E9] focus:border-[#0B2D1B] focus:bg-white rounded-xl text-sm text-[#0B2D1B] placeholder:text-[#8A92A0] focus:outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <button
+                    type="submit"
+                    disabled={isLoading || otpDigits.join("").length < 6 || !newPassword}
+                    className="w-full mt-2 py-3.5 rounded-2xl bg-[#0B2D1B] hover:bg-[#06180E] text-white font-bold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isLoading ? (
+                      <RotateCw size={16} className="animate-spin text-[#C8F52F]" />
+                    ) : (
+                      <>
+                        <Check size={16} className="text-[#C8F52F] stroke-[3]" />
+                        <span>Update Password & Sign In</span>
+                      </>
+                    )}
+                  </button>
+
+                  <div className="pt-2 text-xs text-[#5A6C5F] flex items-center justify-center gap-1.5">
+                    <span>Didn't receive code?</span>
+                    {resendCountdown > 0 ? (
+                      <span className="font-semibold text-[#8A92A0]">
+                        Resend in {resendCountdown}s
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleResendOtp}
+                        className="font-bold text-[#0B2D1B] hover:underline cursor-pointer"
+                      >
+                        Resend Code
+                      </button>
+                    )}
+                  </div>
+                </form>
+              )}
+
+              {/* ======================= MODE 5: OTP VERIFY ======================= */}
               {authMode === "OTP_VERIFY" && (
                 <form onSubmit={handleVerifyOtpSubmit} className="space-y-5 text-center">
                   <div className="space-y-1">

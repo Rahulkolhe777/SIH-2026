@@ -38,6 +38,16 @@ export interface VerifyOtpPayload {
   type?: OtpVerificationType;
 }
 
+export interface ForgotPasswordPayload {
+  email: string;
+}
+
+export interface ResetPasswordPayload {
+  email: string;
+  token: string; // 6-digit OTP code or reset token
+  newPassword: string;
+}
+
 export interface AuthResponseData {
   user: User;
   accessToken: string;

@@ -55,3 +55,25 @@ export async function apiGetCurrentUser(): Promise<ApiResponse<{ user: User }>> 
   const response = await apiClient.get<ApiResponse<{ user: User }>>("/api/v1/auth/me");
   return response.data;
 }
+
+/**
+ * Request password recovery email and OTP using Axios
+ */
+export async function apiForgotPassword(email: string): Promise<ApiResponse<{ message: string }>> {
+  const response = await apiClient.post<ApiResponse<{ message: string }>>("/api/v1/auth/forgot-password", {
+    email,
+  });
+  return response.data;
+}
+
+/**
+ * Submit password reset with OTP code and new password using Axios
+ */
+export async function apiResetPassword(payload: {
+  email: string;
+  token: string;
+  newPassword: string;
+}): Promise<ApiResponse<{ message: string }>> {
+  const response = await apiClient.post<ApiResponse<{ message: string }>>("/api/v1/auth/reset-password", payload);
+  return response.data;
+}

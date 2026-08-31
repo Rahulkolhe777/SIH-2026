@@ -8,6 +8,8 @@ import type {
   SendOtpPayload,
   User,
   VerifyOtpPayload,
+  ForgotPasswordPayload,
+  ResetPasswordPayload,
 } from "../../interfaces";
 import {
   apiGetCurrentUser,
@@ -15,6 +17,8 @@ import {
   apiRegister,
   apiSendOtp,
   apiVerifyOtp,
+  apiForgotPassword,
+  apiResetPassword,
 } from "../../services/auth.api";
 
 const initialUser: User | null = (() => {
@@ -115,6 +119,35 @@ export const verifyOtpThunk = createAsyncThunk(
       );
     }
     return response.data;
+  }
+);
+
+export const forgotPasswordThunk = createAsyncThunk(
+  "auth/forgotPassword",
+  async (payload: ForgotPasswordPayload, { rejectWithValue }) => {
+    const response = await apiForgotPassword(payload.email);
+    if (!response.success) {
+      return rejectWithValue(
+        response.error?.message || response.message || "Failed to initiate password reset."
+      );
+    }
+    return {
+      email: payload.email,
+      message: response.message || response.data?.message || "Password reset code sent to your email.",
+    };
+  }
+);
+
+export const resetPasswordThunk = createAsyncThunk(
+  "auth/resetPassword",
+  async (payload: ResetPasswordPayload, { rejectWithValue }) => {
+    const response = await apiResetPassword(payload);
+    if (!response.success) {
+      return rejectWithValue(
+        response.error?.message || response.message || "Password reset failed. Invalid or expired OTP code."
+      );
+    }
+    return response.message || response.data?.message || "Password reset successfully! Please sign in.";
   }
 );
 
@@ -274,6 +307,43 @@ export const authSlice = createSlice({
       .addCase(verifyOtpThunk.rejected, (state, action) => {
         state.isLoading = false;
         state.error = (action.payload as string) || "Invalid or expired OTP code.";
+      });
+
+    // Forgot Password
+    builder
+      .addCase(forgotPasswordThunk.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+        state.errorCode = null;
+      })
+      .addCase(forgotPasswordThunk.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.pendingIdentifier = action.payload.email;
+        state.pendingOtpType = "PASSWORD_RESET";
+        state.otpSent = true;
+        state.successMessage = action.payload.message;
+      })
+      .addCase(forgotPasswordThunk.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = (action.payload as string) || "Failed to request password reset.";
+      });
+
+    // Reset Password
+    builder
+      .addCase(resetPasswordThunk.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+        state.errorCode = null;
+      })
+      .addCase(resetPasswordThunk.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.pendingIdentifier = null;
+        state.otpSent = false;
+        state.successMessage = (action.payload as string) || "Password reset successfully! Please sign in.";
+      })
+      .addCase(resetPasswordThunk.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = (action.payload as string) || "Password reset failed.";
       });
 
     // Fetch Current User
