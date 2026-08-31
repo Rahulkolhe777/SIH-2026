@@ -109,21 +109,21 @@ export default function SmartSolutionsCarousel() {
         {/* Horizontal Carousel Track */}
         <div
           ref={scrollRef}
-          className="flex items-stretch gap-6 overflow-x-auto scrollbar-none pb-4 snap-x snap-mandatory -mx-2 px-2"
+          className="flex items-stretch gap-4 sm:gap-6 overflow-x-auto scrollbar-none pb-4 snap-x snap-mandatory -mx-2 px-2"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
           {solutions.map((card) => (
             <div
               key={card.id}
-              className="group shrink-0 w-[300px] sm:w-[350px] lg:w-[380px] snap-start flex flex-col justify-between transition-all duration-300"
+              className="group shrink-0 w-[240px] xs:w-[270px] sm:w-[350px] lg:w-[380px] snap-start flex flex-col justify-between transition-all duration-300"
             >
               {/* Image Container with Hover Zoom */}
-              <div className="relative w-full h-[340px] sm:h-[380px] lg:h-[410px] rounded-[24px] overflow-hidden shadow-sm bg-[#E8EAE6] mb-5">
+              <div className="relative w-full h-[220px] xs:h-[260px] sm:h-[380px] lg:h-[410px] rounded-[18px] sm:rounded-[24px] overflow-hidden shadow-sm bg-[#E8EAE6] mb-3.5 sm:mb-5">
                 <Image
                   src={card.image}
                   alt={card.imageAlt}
                   fill
-                  sizes="(max-width: 768px) 300px, 380px"
+                  sizes="(max-width: 768px) 270px, 380px"
                   className="object-cover object-center transition-transform duration-700 ease-out group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none" />
@@ -131,10 +131,10 @@ export default function SmartSolutionsCarousel() {
 
               {/* Title & Description */}
               <div>
-                <h3 className="text-lg sm:text-xl font-medium text-[#0B2D1B] tracking-tight mb-2">
+                <h3 className="text-base sm:text-xl font-medium text-[#0B2D1B] tracking-tight mb-1.5 sm:mb-2">
                   {card.title}
                 </h3>
-                <p className="text-sm text-[#5A6C5F] leading-relaxed font-normal">
+                <p className="text-xs sm:text-sm text-[#5A6C5F] leading-relaxed font-normal">
                   {card.description}
                 </p>
               </div>

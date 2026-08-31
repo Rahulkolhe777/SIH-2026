@@ -18,35 +18,35 @@ export default function Home() {
       </div>
 
       {/* LAYER 2: Trust Marquee & Cultiva Legacy Statement (Overlaps Hero) */}
-      <section className="w-full relative z-20 bg-[#FCFCFA] rounded-t-[32px] md:rounded-t-[44px] -mt-10 md:-mt-14 section-stack-shadow border-t border-black/5 overflow-hidden transition-all duration-300">
+      <section className="w-full relative z-20 bg-[#FCFCFA] rounded-t-[24px] sm:rounded-t-[32px] md:rounded-t-[44px] -mt-6 sm:-mt-10 md:-mt-14 section-stack-shadow border-t border-black/5 overflow-hidden transition-all duration-300">
         <TrustMarquee />
         <PlatformIntro />
       </section>
 
       {/* LAYER 3: Smart Farming Solutions Accordion (Overlaps Layer 2) */}
-      <section className="w-full relative z-30 bg-[#FCFCFA] rounded-t-[32px] md:rounded-t-[44px] -mt-8 md:-mt-10 section-stack-shadow border-t border-black/5 overflow-hidden transition-all duration-300">
+      <section className="w-full relative z-30 bg-[#FCFCFA] rounded-t-[24px] sm:rounded-t-[32px] md:rounded-t-[44px] -mt-5 sm:-mt-8 md:-mt-10 section-stack-shadow border-t border-black/5 overflow-hidden transition-all duration-300">
         <SolutionsAccordion />
       </section>
 
       {/* LAYER 4: How It Works Feature Hub (Overlaps Layer 3) */}
-      <section className="w-full relative z-40 bg-[#FCFCFA] rounded-t-[32px] md:rounded-t-[44px] -mt-8 md:-mt-10 section-stack-shadow border-t border-black/5 overflow-hidden transition-all duration-300">
+      <section className="w-full relative z-40 bg-[#FCFCFA] rounded-t-[24px] sm:rounded-t-[32px] md:rounded-t-[44px] -mt-5 sm:-mt-8 md:-mt-10 section-stack-shadow border-t border-black/5 overflow-hidden transition-all duration-300">
         <HowItWorks />
       </section>
 
       {/* LAYER 5: Statistics & Smart Solutions Carousel (Overlaps Layer 4) */}
-      <section className="w-full relative z-50 bg-[#FCFCFA] rounded-t-[32px] md:rounded-t-[44px] -mt-8 md:-mt-10 section-stack-shadow border-t border-black/5 overflow-hidden transition-all duration-300">
+      <section className="w-full relative z-50 bg-[#FCFCFA] rounded-t-[24px] sm:rounded-t-[32px] md:rounded-t-[44px] -mt-5 sm:-mt-8 md:-mt-10 section-stack-shadow border-t border-black/5 overflow-hidden transition-all duration-300">
         <Statistics />
         <SmartSolutionsCarousel />
       </section>
 
       {/* LAYER 6: Testimonials & FAQ (Overlaps Layer 5) */}
-      <section className="w-full relative z-60 bg-[#FCFCFA] rounded-t-[32px] md:rounded-t-[44px] -mt-8 md:-mt-10 section-stack-shadow border-t border-black/5 overflow-hidden transition-all duration-300">
+      <section className="w-full relative z-60 bg-[#FCFCFA] rounded-t-[24px] sm:rounded-t-[32px] md:rounded-t-[44px] -mt-5 sm:-mt-8 md:-mt-10 section-stack-shadow border-t border-black/5 overflow-hidden transition-all duration-300">
         <Testimonials />
         <FAQ />
       </section>
 
       {/* LAYER 7: Footer (Overlaps Layer 6) */}
-      <section className="w-full relative z-70 rounded-t-[32px] md:rounded-t-[44px] -mt-8 md:-mt-10 overflow-hidden transition-all duration-300">
+      <section className="w-full relative z-70 rounded-t-[24px] sm:rounded-t-[32px] md:rounded-t-[44px] -mt-5 sm:-mt-8 md:-mt-10 overflow-hidden transition-all duration-300">
         <Footer />
       </section>
     </main>
