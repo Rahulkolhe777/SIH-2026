@@ -58,3 +58,7 @@ This repository contains the project source code, configuration, documentation, 
 * Briefly summarize what changed.
 * Mention important tests and checks that were run.
 * Clearly call out assumptions, limitations, risks, or unresolved issues.
+
+## frontend 
+* always try to compoenets that are already present (if essential ) 
+* make components or relavant UI donnot dump everything in single file 

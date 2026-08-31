@@ -1,0 +1,18 @@
+now use the Temp_frontend components , UI a, desing to make the farmer dashboard but colors and fonts should match with the landing page 
+    - dashboard should contains static data for now 
+        - create new booking button 
+        - total bookings( current and past ) count
+        - previous booking button ( navigates to page )
+        -  total sales in KG 
+        -  active booking stats 
+        -  suggested mandi with slot 
+        -  recent messages 
+        
+
+-donnot make or iontegrate any backend apis on this page expect logout and other auth functionilties 
+-try to use some green color ( fade or thhat match with landing page )
+also make a design.md file for landing poage 
+        
+
+
+

@@ -40,13 +40,15 @@ export default function Home() {
       </section>
 
       {/* LAYER 6: Testimonials & FAQ (Overlaps Layer 5) */}
-      <section className="w-full relative z-60 bg-[#FCFCFA] rounded-t-[32px] md:rounded-t-[44px] -mt-8 md:-mt-10 section-stack-shadow border-t border-black/5 overflow-hidden pb-16 transition-all duration-300">
+      <section className="w-full relative z-60 bg-[#FCFCFA] rounded-t-[32px] md:rounded-t-[44px] -mt-8 md:-mt-10 section-stack-shadow border-t border-black/5 overflow-hidden transition-all duration-300">
         <Testimonials />
         <FAQ />
       </section>
 
-      {/* LAYER 7: Footer */}
-      <Footer />
+      {/* LAYER 7: Footer (Overlaps Layer 6) */}
+      <section className="w-full relative z-70 rounded-t-[32px] md:rounded-t-[44px] -mt-8 md:-mt-10 overflow-hidden transition-all duration-300">
+        <Footer />
+      </section>
     </main>
   );
 }

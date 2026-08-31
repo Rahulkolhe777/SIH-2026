@@ -283,7 +283,8 @@ describe("Authentication & Registration Suite", () => {
         });
 
       expect(response.status).toBe(401);
-      expect(response.body.code).toBe("INVALID_CREDENTIALS");
+      expect(response.body.code).toBe("INCORRECT_PASSWORD");
+      expect(response.body.message).toBe("Your password is incorrect.");
     });
 
     it("should reject login for non-existent user (401)", async () => {
@@ -297,7 +298,8 @@ describe("Authentication & Registration Suite", () => {
         });
 
       expect(response.status).toBe(401);
-      expect(response.body.code).toBe("INVALID_CREDENTIALS");
+      expect(response.body.code).toBe("USER_NOT_FOUND");
+      expect(response.body.message).toBe("No account found with this email address.");
     });
 
     it("should reject login for unverified account (403 ACCOUNT_NOT_VERIFIED)", async () => {
