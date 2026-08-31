@@ -26,6 +26,7 @@ coverage
 out/
 build
 dist
+*.tsbuildinfo
 
 # Debug
 npm-debug.log*
@@ -35,8 +36,4 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
-
-# Test apps
-apps/f-test/
-apps/f-test
 

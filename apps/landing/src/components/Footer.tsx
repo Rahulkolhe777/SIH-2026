@@ -1,205 +1,315 @@
 "use client";
 
-import React from "react";
-import Image from "next/image";
-import {
-  Sprout,
-  ArrowUpRight,
-  ArrowUp,
-  ShieldCheck,
-  Phone,
-  Mail,
-  MapPin,
-  Clock,
-  Sparkles,
-  ExternalLink,
-} from "lucide-react";
+import React, { useState } from "react";
+import Link from "next/link";
+import { ArrowUpRight, Mail, Phone, MapPin, Send, Sprout, Landmark } from "lucide-react";
+
+const footerNavColumns = [
+  {
+    title: "Platform",
+    links: [
+      { label: "Book Mandi Slot", href: "#book-slot" },
+      { label: "Live Queue Status", href: "#queue-status" },
+      { label: "Crop Price Tracker", href: "#prices" },
+      { label: "Mandi Directory", href: "#mandis" },
+      { label: "Digital Token", href: "#token" },
+    ],
+  },
+  {
+    title: "Solutions",
+    links: [
+      { label: "For Farmers", href: "#farmers", icon: Sprout },
+      { label: "For Mandi Operators", href: "#operators", icon: Landmark },
+      { label: "Queue Management", href: "#queue" },
+      { label: "Smart Procurement", href: "#procurement" },
+      { label: "Analytics Dashboard", href: "#analytics" },
+    ],
+  },
+  {
+    title: "Resources",
+    links: [
+      { label: "How It Works", href: "#how-it-works" },
+      { label: "FAQ", href: "#faq" },
+      { label: "Farmer Stories", href: "#testimonials" },
+      { label: "Blog", href: "#blog" },
+      { label: "API Documentation", href: "#api-docs" },
+    ],
+  },
+  {
+    title: "Company",
+    links: [
+      { label: "About Agrovia", href: "#about" },
+      { label: "Careers", href: "#careers" },
+      { label: "Contact Us", href: "#contact" },
+      { label: "Privacy Policy", href: "#privacy" },
+      { label: "Terms of Service", href: "#terms" },
+    ],
+  },
+];
+
+const socialLinks = [
+  {
+    label: "Twitter / X",
+    href: "#",
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+      </svg>
+    ),
+  },
+  {
+    label: "LinkedIn",
+    href: "#",
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+        <path d="M20.5 2h-17A1.5 1.5 0 002 3.5v17A1.5 1.5 0 003.5 22h17a1.5 1.5 0 001.5-1.5v-17A1.5 1.5 0 0020.5 2zM8 19H5v-9h3zM6.5 8.25A1.75 1.75 0 118.3 6.5a1.78 1.78 0 01-1.8 1.75zM19 19h-3v-4.74c0-1.42-.6-1.93-1.38-1.93A1.74 1.74 0 0013 14.19a.66.66 0 000 .14V19h-3v-9h2.9v1.3a3.11 3.11 0 012.7-1.4c1.55 0 3.36.86 3.36 3.66z" />
+      </svg>
+    ),
+  },
+  {
+    label: "YouTube",
+    href: "#",
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12z" />
+      </svg>
+    ),
+  },
+  {
+    label: "Instagram",
+    href: "#",
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+        <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" />
+      </svg>
+    ),
+  },
+];
 
 export default function Footer() {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:5173";
+  const [email, setEmail] = useState("");
+  const [subscribed, setSubscribed] = useState(false);
 
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  const handleSubscribe = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (email.trim()) {
+      setSubscribed(true);
+      setEmail("");
+      setTimeout(() => setSubscribed(false), 4000);
+    }
   };
 
   return (
-    <footer className="w-full relative z-70 bg-[#05160C] text-white rounded-t-[36px] md:rounded-t-[50px] -mt-10 md:-mt-14 section-stack-shadow border-t border-white/10 overflow-hidden font-sans selection:bg-[#C8F52F] selection:text-[#0B2D1B]">
-      {/* Background Hero Wheat Layer with Cinematic Dark Forest Lighting */}
-      <div className="absolute inset-0 w-full h-full pointer-events-none opacity-20">
-        <Image
-          src="/images/hero-wheat.jpg"
-          alt="Agrovia Wheat Fields"
-          fill
-          sizes="100vw"
-          className="object-cover object-center"
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#05160C] via-[#05160C]/90 to-[#030d07]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(200,245,47,0.15)_0%,_transparent_60%)]" />
+    <footer className="w-full bg-gradient-to-b from-[#0A2818] via-[#071E12] to-[#04120A] text-white relative overflow-hidden">
+      {/* Top accent line — lime glow */}
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#C8F52F]/30 to-transparent" />
+
+      {/* Ambient gradient overlays — rich multi-hue depth */}
+      <div className="absolute -top-32 -left-32 w-[700px] h-[700px] bg-[radial-gradient(circle,_rgba(200,245,47,0.07)_0%,_rgba(16,185,129,0.04)_40%,_transparent_70%)] pointer-events-none" />
+      <div className="absolute -bottom-40 -right-40 w-[600px] h-[600px] bg-[radial-gradient(circle,_rgba(20,184,166,0.05)_0%,_rgba(200,245,47,0.03)_50%,_transparent_70%)] pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-[radial-gradient(ellipse,_rgba(16,185,129,0.03)_0%,_transparent_60%)] pointer-events-none" />
+
+      {/* CTA Banner */}
+      <div className="relative z-10 w-full px-6 sm:px-8 md:px-12 lg:px-16 pt-16 md:pt-20">
+        <div className="max-w-7xl mx-auto">
+          <div className="relative bg-gradient-to-br from-[#0C2E1C] via-[#06180E] to-[#081F10] border border-[#C8F52F]/10 rounded-[24px] md:rounded-[28px] px-6 sm:px-10 md:px-14 py-10 md:py-14 overflow-hidden shadow-[inset_0_1px_0_0_rgba(200,245,47,0.08)]">
+            {/* Decorative glows — dual-tone emerald + lime */}
+            <div className="absolute -top-24 -right-24 w-72 h-72 bg-[radial-gradient(circle,_rgba(200,245,47,0.12)_0%,_rgba(16,185,129,0.06)_50%,_transparent_70%)] rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-20 -left-20 w-56 h-56 bg-[radial-gradient(circle,_rgba(20,184,166,0.08)_0%,_rgba(200,245,47,0.04)_60%,_transparent_70%)] rounded-full blur-3xl pointer-events-none" />
+
+            <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 md:gap-10">
+              <div className="max-w-[520px]">
+                <h2 className="text-2xl sm:text-3xl md:text-4xl font-medium leading-[1.15] tracking-tight text-white/95">
+                  Ready to skip the{" "}
+                  <span className="font-editorial italic font-normal">
+                    queue?
+                  </span>
+                </h2>
+                <p className="mt-3 text-[#a8c4b0] text-sm sm:text-[15px] leading-relaxed font-light">
+                  Join 10,000+ farmers already using Agrovia Mandi for hassle-free
+                  slot booking and fair crop prices.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <a
+                  href={`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001"}/register`}
+                  className="group inline-flex items-center gap-2 bg-[#C8F52F] hover:bg-[#d4ff45] active:scale-[0.98] text-[#0B2D1B] font-semibold px-6 py-3.5 rounded-full text-sm transition-all duration-300 shadow-lg shadow-[#C8F52F]/20 hover:shadow-[#C8F52F]/35 cursor-pointer"
+                >
+                  <span>Book Mandi Slot</span>
+                  <ArrowUpRight
+                    size={16}
+                    strokeWidth={2.5}
+                    className="transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                  />
+                </a>
+                <a
+                  href={`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001"}/login`}
+                  className="inline-flex items-center bg-white/[0.08] hover:bg-white/[0.14] backdrop-blur-md border border-white/20 text-white/90 hover:text-white font-medium px-6 py-3.5 rounded-full text-sm transition-all duration-300 hover:border-[#C8F52F]/25 cursor-pointer"
+                >
+                  Mandi Portal
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Main Container */}
-      <div className="relative z-10 max-w-7xl mx-auto px-6 sm:px-8 md:px-12 lg:px-16 pt-16 md:pt-20 pb-12">
-        
-        {/* Top Feature CTA Card */}
-        <div className="bg-white/[0.04] border border-white/15 backdrop-blur-2xl rounded-[32px] md:rounded-[40px] p-8 sm:p-12 md:p-14 relative overflow-hidden flex flex-col lg:flex-row lg:items-center justify-between gap-8 shadow-2xl mb-16">
-          <div className="space-y-3.5 max-w-xl text-left">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#C8F52F]/15 border border-[#C8F52F]/30 text-[#C8F52F] text-xs font-semibold">
-              <span className="w-2 h-2 rounded-full bg-[#C8F52F] animate-pulse" />
-              <span>Smart APMC Mandi Network</span>
+      {/* Main Footer Grid */}
+      <div className="relative z-10 w-full px-6 sm:px-8 md:px-12 lg:px-16 pt-14 md:pt-16 pb-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-6 gap-y-10">
+            {/* Brand Column */}
+            <div className="col-span-2 sm:col-span-3 lg:col-span-2 pr-4">
+              {/* Logo */}
+              <a
+                href="#home"
+                className="flex items-center gap-2.5 group cursor-pointer mb-5"
+                aria-label="Agrovia Home"
+              >
+                <div className="w-8 h-8 bg-[#C8F52F] rounded-lg flex items-center justify-center shadow-[0_0_16px_rgba(200,245,47,0.25)] group-hover:scale-105 group-hover:shadow-[0_0_20px_rgba(200,245,47,0.35)] transition-all duration-200">
+                  <svg
+                    className="w-5 h-5 text-[#0B2D1B]"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M7 16h10" />
+                    <path d="M9 12h10" />
+                    <path d="M5 8h10" />
+                  </svg>
+                </div>
+                <span className="text-white font-semibold text-lg tracking-tight">
+                  Agrovia Mandi
+                </span>
+              </a>
+
+              <p className="text-[#8fa898] text-sm leading-relaxed mb-6 max-w-[300px]">
+                Digitizing India&apos;s APMC mandis with smart slot booking,
+                real-time queue management, and transparent crop pricing.
+              </p>
+
+              {/* Newsletter */}
+              <form onSubmit={handleSubscribe} className="relative max-w-[300px]">
+                <label className="text-xs text-[#C8F52F]/50 uppercase tracking-widest font-semibold mb-2.5 block">
+                  Stay Updated
+                </label>
+                <div className="flex items-center bg-white/[0.05] border border-white/10 rounded-full overflow-hidden focus-within:border-[#C8F52F]/40 focus-within:bg-white/[0.08] transition-all duration-300">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter your email"
+                    className="flex-1 bg-transparent text-white/90 text-sm px-4 py-3 placeholder:text-white/30 focus:outline-none"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    className="p-3 text-white/70 hover:text-[#C8F52F] transition-colors duration-200 cursor-pointer"
+                    aria-label="Subscribe"
+                  >
+                    <Send size={16} strokeWidth={2} />
+                  </button>
+                </div>
+                {subscribed && (
+                  <p className="mt-2 text-xs text-[#C8F52F] font-medium animate-pulse">
+                    ✓ Subscribed successfully!
+                  </p>
+                )}
+              </form>
             </div>
 
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-normal tracking-tight text-white leading-[1.08]">
-              <span>Zero Waiting Time. </span>
-              <span className="block font-editorial italic font-normal text-[#C8F52F]">
-                Guaranteed Fair Mandi Prices.
-              </span>
-            </h2>
-
-            <p className="text-white/80 text-sm sm:text-base font-light leading-relaxed">
-              Book digital unloading slots, track weighbridge queues in real-time, and receive instant DBT payments without gate congestion.
-            </p>
+            {/* Nav Columns */}
+            {footerNavColumns.map((column) => (
+              <div key={column.title}>
+                <h4 className="text-xs uppercase tracking-widest font-semibold mb-4 bg-gradient-to-r from-[#C8F52F]/60 to-[#10B981]/50 bg-clip-text text-transparent">
+                  {column.title}
+                </h4>
+                <ul className="flex flex-col gap-2.5">
+                  {column.links.map((link) => (
+                    <li key={link.label}>
+                      <a
+                        href={link.href}
+                        className="group flex items-center gap-1.5 text-[13px] sm:text-sm text-[#8fa898] hover:text-white hover:translate-x-0.5 transition-all duration-200"
+                      >
+                        {"icon" in link && link.icon && (
+                          <link.icon size={13} className="text-[#10B981]/60 group-hover:text-[#C8F52F] transition-colors duration-200" />
+                        )}
+                        <span>{link.label}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           </div>
 
-          {/* Action CTAs */}
-          <div className="flex flex-wrap items-center gap-3.5 sm:gap-4">
+          {/* Contact Info Row */}
+          <div className="mt-12 pt-8 border-t border-gradient-to-r border-white/[0.06] flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-4 sm:gap-8">
             <a
-              href={`${appUrl}/register`}
-              className="group inline-flex items-center justify-center gap-2.5 bg-[#C8F52F] hover:bg-[#b8e826] active:scale-98 text-[#0B2D1B] font-semibold px-7 py-4 rounded-full text-sm sm:text-[15px] transition-all duration-300 shadow-lg shadow-black/30 hover:shadow-[#C8F52F]/25 cursor-pointer"
+              href="mailto:support@agrovia.in"
+              className="flex items-center gap-2 text-sm text-[#8fa898] hover:text-white transition-colors duration-200 group"
             >
-              <span>Book Mandi Slot</span>
-              <ArrowUpRight
-                size={18}
-                strokeWidth={2.5}
-                className="transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
-              />
+              <Mail size={14} className="text-[#10B981]/50 group-hover:text-[#C8F52F] transition-colors duration-200" />
+              <span>support@agrovia.in</span>
             </a>
-
             <a
-              href={`${appUrl}/login`}
-              className="inline-flex items-center justify-center bg-white/10 hover:bg-white/20 active:scale-98 backdrop-blur-md border border-white/30 text-white font-medium px-7 py-4 rounded-full text-sm sm:text-[15px] transition-all duration-300 cursor-pointer hover:border-white"
+              href="tel:+911800123456"
+              className="flex items-center gap-2 text-sm text-[#8fa898] hover:text-white transition-colors duration-200 group"
             >
-              <span>Mandi Portal</span>
+              <Phone size={14} className="text-[#10B981]/50 group-hover:text-[#C8F52F] transition-colors duration-200" />
+              <span>1800-123-456</span>
             </a>
+            <div className="flex items-center gap-2 text-sm text-[#8fa898]">
+              <MapPin size={14} className="text-[#10B981]/50 shrink-0" />
+              <span>Pune, Maharashtra, India</span>
+            </div>
           </div>
         </div>
+      </div>
 
-        {/* 4-Column Navigation Links Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-10 lg:gap-12 pb-14 border-b border-white/10 text-left">
-          
-          {/* Column 1: Brand Info (4 Cols) */}
-          <div className="lg:col-span-4 space-y-5">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-[#C8F52F] text-[#0B2D1B] flex items-center justify-center shadow-lg shadow-[#C8F52F]/20 font-bold">
-                <Sprout size={22} strokeWidth={2.5} />
-              </div>
-              <div className="flex flex-col">
-                <span className="font-bold text-xl text-white tracking-tight leading-tight">Agrovia</span>
-                <span className="text-[10px] text-[#C8F52F] font-semibold tracking-wider uppercase">Smart Mandi Ecosystem</span>
-              </div>
-            </div>
-
-            <p className="text-white/70 text-xs sm:text-sm leading-relaxed font-light">
-              Transforming traditional agricultural yards with automated gate QR verification, digital token scheduling, and transparent MSP price discovery.
+      {/* Bottom Bar */}
+      <div className="relative z-10 w-full px-6 sm:px-8 md:px-12 lg:px-16 pb-6 md:pb-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="pt-6 border-t border-white/[0.06] flex flex-col sm:flex-row items-center justify-between gap-4">
+            {/* Copyright */}
+            <p className="text-xs text-[#5a7a63] font-light">
+              © {new Date().getFullYear()} Agrovia Mandi. All rights reserved.
             </p>
 
-            <div className="inline-flex items-center gap-2 p-2.5 rounded-2xl bg-white/[0.04] border border-white/10 text-xs text-white/80">
-              <ShieldCheck size={16} className="text-[#C8F52F]" />
-              <span>e-NAM & Ministry of Agriculture Aligned</span>
+            {/* Social Links */}
+            <div className="flex items-center gap-1">
+              {socialLinks.map((social) => (
+                <a
+                  key={social.label}
+                  href={social.href}
+                  aria-label={social.label}
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-[#8fa898] hover:text-[#C8F52F] hover:bg-[#C8F52F]/[0.08] transition-all duration-200 cursor-pointer"
+                >
+                  {social.icon}
+                </a>
+              ))}
+            </div>
+
+            {/* Bottom Legal Links */}
+            <div className="flex items-center gap-4 text-xs text-[#5a7a63]">
+              <a href="#privacy" className="hover:text-[#8fa898] transition-colors duration-200">
+                Privacy
+              </a>
+              <span className="text-[#2a4a33]">|</span>
+              <a href="#terms" className="hover:text-[#8fa898] transition-colors duration-200">
+                Terms
+              </a>
+              <span className="text-[#2a4a33]">|</span>
+              <a href="#cookies" className="hover:text-[#8fa898] transition-colors duration-200">
+                Cookies
+              </a>
             </div>
           </div>
-
-          {/* Column 2: Platform Links (3 Cols) */}
-          <div className="lg:col-span-3 space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-white">Platform Services</h3>
-            <ul className="space-y-2.5 text-xs text-white/70">
-              <li>
-                <a href={`${appUrl}/login`} className="hover:text-[#C8F52F] transition-colors flex items-center gap-1.5">
-                  <span>Farmer Unloading Portal</span>
-                  <ExternalLink size={11} className="text-white/40" />
-                </a>
-              </li>
-              <li>
-                <a href={`${appUrl}/login`} className="hover:text-[#C8F52F] transition-colors flex items-center gap-1.5">
-                  <span>APMC Gate Operator Console</span>
-                  <ExternalLink size={11} className="text-white/40" />
-                </a>
-              </li>
-              <li>
-                <a href="#how-it-works" className="hover:text-[#C8F52F] transition-colors">
-                  Digital QR Token Pass Flow
-                </a>
-              </li>
-              <li>
-                <a href="#solutions" className="hover:text-[#C8F52F] transition-colors">
-                  Live Weighbridge Integration
-                </a>
-              </li>
-              <li>
-                <a href="#statistics" className="hover:text-[#C8F52F] transition-colors">
-                  APMC Mandi Price Index
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          {/* Column 3: Commodities (2.5 Cols) */}
-          <div className="lg:col-span-2 space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-white">Key Commodities</h3>
-            <ul className="space-y-2.5 text-xs text-white/70">
-              <li className="hover:text-[#C8F52F] transition-colors cursor-pointer">Sharbati Wheat (Grade A)</li>
-              <li className="hover:text-[#C8F52F] transition-colors cursor-pointer">Yellow Soybean</li>
-              <li className="hover:text-[#C8F52F] transition-colors cursor-pointer">Basmati Rice 1121</li>
-              <li className="hover:text-[#C8F52F] transition-colors cursor-pointer">Mustard & Oilseeds</li>
-              <li className="hover:text-[#C8F52F] transition-colors cursor-pointer">Gram / Chana & Pulses</li>
-            </ul>
-          </div>
-
-          {/* Column 4: Helpdesk & Support (3 Cols) */}
-          <div className="lg:col-span-3 space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-white">Yard Helpdesk</h3>
-            <div className="space-y-3 text-xs text-white/70">
-              <div className="flex items-center gap-2.5">
-                <Phone size={14} className="text-[#C8F52F] shrink-0" />
-                <span>Toll-Free: 1800-425-1555</span>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <Mail size={14} className="text-[#C8F52F] shrink-0" />
-                <span>support@agrovia.in</span>
-              </div>
-              <div className="flex items-start gap-2.5">
-                <MapPin size={14} className="text-[#C8F52F] shrink-0 mt-0.5" />
-                <span>Central APMC Tech Hub, Indore Mandi Yard #01, M.P.</span>
-              </div>
-            </div>
-          </div>
-
         </div>
-
-        {/* Bottom Bar with Status & Back-to-Top Button */}
-        <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-white/60">
-          <div>
-            © {new Date().getFullYear()} Agrovia Cloud Technologies. All rights reserved.
-          </div>
-
-          {/* Live System Uptime Indicator */}
-          <div className="flex items-center gap-2 bg-white/[0.05] border border-white/10 px-3.5 py-1.5 rounded-full">
-            <span className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
-            <span className="text-white/80 font-medium">All 142 Mandi Gateways Operational (99.98% Uptime)</span>
-          </div>
-
-          {/* Back to Top */}
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={scrollToTop}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-white text-xs font-semibold transition-all cursor-pointer"
-            >
-              <span>Back to top</span>
-              <ArrowUp size={13} />
-            </button>
-          </div>
-        </div>
-
       </div>
     </footer>
   );

@@ -29,3 +29,13 @@ VITE_LANDING_URL=http://localhost:3000
 - Typography: `Plus Jakarta Sans` for clean, modern interfaces and `Newsreader / font-editorial italic` for editorial accent text.
 - Color Tokens: Primary dark `#0B2D1B`, Deep background `#06180E`, Accent Lime `#C8F52F`, Surface Warm `#FCFCFA`.
 - Portal Roles: **Farmer** (`Sprout` icon) and **Mandi Operator** (`Landmark` icon) only, without emojis.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
