@@ -11,7 +11,7 @@ export function StatusBadge({ status }: { status: BookingStatus }) {
     REJECTED: "bg-rose-500/10 text-rose-400 border-rose-500/30",
     CANCELLED: "bg-zinc-500/10 text-zinc-400 border-zinc-500/30",
   };
-
+    
   return (
     <span
       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
