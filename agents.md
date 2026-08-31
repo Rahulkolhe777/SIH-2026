@@ -34,6 +34,7 @@ This repository contains the project source code, configuration, documentation, 
 * **Interface & Type Management**: All interfaces and TypeScript types must reside in a dedicated `interfaces/` folder (e.g., `src/interfaces/<module_name>.interface.ts` and barrel-exported via `src/interfaces/index.ts`). Every time you create an interface, first check if it exists in the `interfaces/` folder; if not, create it there in a modular way and export it.
 * **Module Documentation**: Keep comprehensive documentation for every feature/module in `docs/<module_name>/` (including architecture, API references, and frontend/consumer integration guides) updated as each module is built.
 * **Shared Database**: All database models, Prisma client, and migrations must reside in `@repo/database` (`packages/database`) so they are sharable across all services (backend, background workers, AI pipelines).
+* **Component Render Optimization**: A component should re-render only when something it actually depends on has changed. Keep state as close as possible to the components that use it, split components into independent render boundaries, and apply targeted memoization (`React.memo`, `useMemo`, `useCallback`, fine-grained selectors) to eliminate cascading re-renders across parent layouts or unrelated sibling components.
 * **Getting Started Documentation**: Maintain and keep `docs/how_to_start/*.md` updated as the project evolves.
 * Run appropriate tests, checks, and builds after making changes.
 
@@ -47,7 +48,8 @@ This repository contains the project source code, configuration, documentation, 
 ## Git
 
 * **Branch Workflow**: Do NOT directly modify or push to the `main` branch. Always work on feature branches named `userName/<module_name>` (e.g., `rupesh/auth`). Only push to that specific `userName/<module_name>` branch.
-* Keep commits focused when committing is requested.
+* **Always Commit on Feature Branches**: Whenever you complete or change a feature/task, always create a focused git commit on the current specific feature branch (never on `main`).
+* Keep commits focused, well-scoped, and documented with clear, descriptive commit messages.
 * Avoid modifying unrelated files.
 * Do not commit secrets, credentials, generated artifacts, or local environment files.
 
