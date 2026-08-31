@@ -168,18 +168,20 @@ export async function loginUser(data: LoginInput) {
 
   if (!user) {
     throw new AppError(
-      "Invalid email/phone or password.",
+      isEmail
+        ? "No account found with this email address."
+        : "No account found with this phone number.",
       401,
-      "INVALID_CREDENTIALS"
+      "USER_NOT_FOUND"
     );
   }
 
   const isPasswordValid = await comparePassword(data.password, user.passwordHash);
   if (!isPasswordValid) {
     throw new AppError(
-      "Invalid email/phone or password.",
+      "Your password is incorrect.",
       401,
-      "INVALID_CREDENTIALS"
+      "INCORRECT_PASSWORD"
     );
   }
 

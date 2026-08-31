@@ -131,8 +131,26 @@ Authenticates via email or phone with password.
 ```json
 {
   "success": false,
-  "message": "Your account is not verified. Please verify your email with the OTP sent during registration.",
+  "message": "Your account is not verified. A fresh OTP has been sent to your email. Please verify to continue.",
   "code": "ACCOUNT_NOT_VERIFIED"
+}
+```
+
+**Unregistered Email Response (`401 Unauthorized`):**
+```json
+{
+  "success": false,
+  "message": "No account found with this email address.",
+  "code": "USER_NOT_FOUND"
+}
+```
+
+**Incorrect Password Response (`401 Unauthorized`):**
+```json
+{
+  "success": false,
+  "message": "Your password is incorrect.",
+  "code": "INCORRECT_PASSWORD"
 }
 ```
 

@@ -66,5 +66,6 @@ export interface AuthState {
   pendingIdentifier: string | null;
   pendingOtpType: OtpVerificationType;
   error: string | null;
+  errorCode: string | null;
   successMessage: string | null;
 }

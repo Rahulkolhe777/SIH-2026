@@ -43,6 +43,7 @@ const initialState: AuthState = {
   pendingIdentifier: null,
   pendingOtpType: "EMAIL_VERIFICATION",
   error: null,
+  errorCode: null,
   successMessage: null,
 };
 
@@ -68,20 +69,21 @@ export const loginUserThunk = createAsyncThunk(
   async (payload: LoginPayload, { rejectWithValue }) => {
     const response = await apiLogin(payload);
     if (!response.success || !response.data) {
-      if (
-        response.code === "ACCOUNT_NOT_VERIFIED" ||
-        response.error?.code === "ACCOUNT_NOT_VERIFIED" ||
-        (response.message && response.message.includes("not verified"))
-      ) {
+      const code = response.code || response.error?.code || "AUTH_ERROR";
+      const message =
+        response.error?.message || response.message || "Invalid credentials. Please check your details.";
+
+      if (code === "ACCOUNT_NOT_VERIFIED" || (message && message.includes("not verified"))) {
         return rejectWithValue({
           code: "ACCOUNT_NOT_VERIFIED",
           identifier: payload.identifier,
           message: "Account not verified yet. A fresh OTP has been dispatched to your email.",
         });
       }
-      return rejectWithValue(
-        response.error?.message || response.message || "Invalid credentials. Please check your details."
-      );
+      return rejectWithValue({
+        code,
+        message,
+      });
     }
     return response.data;
   }
@@ -133,6 +135,7 @@ export const authSlice = createSlice({
   reducers: {
     clearAuthMessages: (state) => {
       state.error = null;
+      state.errorCode = null;
       state.successMessage = null;
     },
     setPendingVerification: (
@@ -146,12 +149,14 @@ export const authSlice = createSlice({
     clearPendingVerification: (state) => {
       state.pendingIdentifier = null;
       state.otpSent = false;
+      state.errorCode = null;
     },
     logout: (state) => {
       state.user = null;
       state.accessToken = null;
       state.isAuthenticated = false;
       state.error = null;
+      state.errorCode = null;
       state.successMessage = null;
       state.otpSent = false;
       state.pendingIdentifier = null;
@@ -169,17 +174,20 @@ export const authSlice = createSlice({
       .addCase(registerUserThunk.pending, (state) => {
         state.isLoading = true;
         state.error = null;
+        state.errorCode = null;
       })
       .addCase(registerUserThunk.fulfilled, (state, action) => {
         state.isLoading = false;
         state.pendingIdentifier = action.payload.email;
         state.pendingOtpType = "EMAIL_VERIFICATION";
         state.otpSent = true;
+        state.errorCode = null;
         state.successMessage = "Account created! Please enter the 6-digit OTP code sent to your email.";
       })
       .addCase(registerUserThunk.rejected, (state, action) => {
         state.isLoading = false;
         state.error = (action.payload as string) || "Registration failed.";
+        state.errorCode = "REGISTRATION_FAILED";
       });
 
     // Login
@@ -187,6 +195,7 @@ export const authSlice = createSlice({
       .addCase(loginUserThunk.pending, (state) => {
         state.isLoading = true;
         state.error = null;
+        state.errorCode = null;
       })
       .addCase(loginUserThunk.fulfilled, (state, action) => {
         state.isLoading = false;
@@ -195,6 +204,7 @@ export const authSlice = createSlice({
         state.isAuthenticated = true;
         state.pendingIdentifier = null;
         state.otpSent = false;
+        state.errorCode = null;
         state.successMessage = `Welcome back, ${action.payload.user.name}!`;
         try {
           localStorage.setItem("mandi_current_user", JSON.stringify(action.payload.user));
@@ -210,8 +220,10 @@ export const authSlice = createSlice({
           state.pendingIdentifier = payload.identifier;
           state.pendingOtpType = "EMAIL_VERIFICATION";
           state.otpSent = true;
+          state.errorCode = "ACCOUNT_NOT_VERIFIED";
           state.error = payload.message;
         } else {
+          state.errorCode = payload?.code || "AUTH_ERROR";
           state.error = (typeof payload === "string" ? payload : payload?.message) || "Invalid credentials.";
         }
       });

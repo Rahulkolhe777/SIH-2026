@@ -36,7 +36,7 @@ export const FarmerDashboard = memo(function FarmerDashboard({
   const activeName = farmerProfile?.name || authUser?.name || fallbackName;
 
   return (
-    <div className="min-h-screen w-full bg-[#F5F7F8] font-sans flex flex-col justify-between selection:bg-[#C8F52F] selection:text-[#0B2D1B]">
+    <div className="min-h-screen w-full bg-[#FCFCFA] font-sans flex flex-col justify-between selection:bg-[#C8F52F] selection:text-[#0B2D1B]">
       {/* Main Full-Screen Content Canvas */}
       <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 md:px-10 lg:px-12 py-5 sm:py-7 flex flex-col flex-1 justify-between">
         <div className="space-y-4 sm:space-y-5">
@@ -59,23 +59,23 @@ export const FarmerDashboard = memo(function FarmerDashboard({
             
             {/* LEFT COLUMN (lg:col-span-6) */}
             <div className="lg:col-span-6 space-y-5 sm:space-y-6 flex flex-col">
-              {/* Top Row: Total Balance Card */}
+              {/* APMC Mandi Balance & Quick Actions */}
               <TotalBalanceCard
                 targetBalance={87325.96}
                 onTransfer={() => setIsBookSlotModalOpen(true)}
                 onRequest={() => setIsBookSlotModalOpen(true)}
               />
 
-              {/* Bottom Row: Recent Mandi Transactions */}
+              {/* Recent Mandi Transactions */}
               <RecentTransactionsCard />
             </div>
 
             {/* RIGHT COLUMN (lg:col-span-6) */}
             <div className="lg:col-span-6 space-y-5 sm:space-y-6 flex flex-col">
-              {/* Top Row: Statistics SVG Double Line Chart */}
+              {/* Statistics SVG Double Line Chart */}
               <StatisticsChartCard />
 
-              {/* Bottom Row: Gate Passes + Live Mandi Rates */}
+              {/* Gate Passes + Live Mandi Rates */}
               <div className="flex flex-col sm:flex-row items-stretch gap-5">
                 <TopExpensesCard />
                 <PaymentScheduleCard />
@@ -91,7 +91,7 @@ export const FarmerDashboard = memo(function FarmerDashboard({
         </footer>
       </div>
 
-      {/* Interactive Farmer Profile & Land Records Modal (connected to PUT /api/v1/farmer/profile) */}
+      {/* Interactive Farmer Profile & Land Records Modal */}
       <FarmerProfileModal
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
